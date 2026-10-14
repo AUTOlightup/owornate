@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  腕上工坊 应用图标：黑金矢量工坊徽标（交叉锤子 + 开口扳手）。
+  108x108 viewport，纯矢量 path，只用 fillColor / strokeColor / fillType，
+  API 26 起可用（fillType 需要 API 24+，minSdk 26 满足），无渐变、无位图。
+  金色 #EBC16C 取自设计变量 accent；底板 #0B0B0D，外圈 #C7A253。
+  圆盘半径 45，工具外接半径约 38，缩到 48dp 仍可辨认。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 近黑圆盘 -->
+    <path
+        android:fillColor="#0B0B0D"
+        android:pathData="M9,54 A45,45 0 1 1 99,54 A45,45 0 1 1 9,54 Z" />
+
+    <!-- 暗金外圈 -->
+    <path
+        android:pathData="M10.5,54 A43.5,43.5 0 1 1 97.5,54 A43.5,43.5 0 1 1 10.5,54 Z"
+        android:strokeColor="#C7A253"
+        android:strokeWidth="2" />
+
+    <!-- 锤柄（左下到右上） -->
+    <path
+        android:fillColor="#EBC16C"
+        android:pathData="M29.6,72.54 L64.08,38.06 L69.94,43.92 L35.46,78.4 Z" />
+
+    <!-- 扳手柄（右上到左下） -->
+    <path
+        android:fillColor="#EBC16C"
+        android:pathData="M38.06,43.92 L72.54,78.4 L78.4,72.54 L43.92,38.06 Z" />
+
+    <!-- 锤头（右上端，垂直于锤柄） -->
+    <path
+        android:fillColor="#EBC16C"
+        android:pathData="M59.53,32.86 L67.99,24.4 L83.6,40.01 L75.14,48.47 Z" />
+
+    <!-- 开口扳手头（左上端）：evenOdd 用槽口切出开口 -->
+    <path
+        android:fillColor="#EBC16C"
+        android:fillType="evenOdd"
+        android:pathData="M25.4,36.44 A11.04,11.04 0 1 1 47.48,36.44 A11.04,11.04 0 1 1 25.4,36.44 Z M21.73,26.42 L33.44,38.13 L38.13,33.44 L26.42,21.73 Z" />
+
+</vector>

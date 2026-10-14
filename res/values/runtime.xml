@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources><string name="runtime_description">用于独立莫奈组件的开机恢复。仅响应表盘启动，不读取窗口内容、不执行手势。</string></resources>

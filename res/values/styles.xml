@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  腕上工坊 应用主题：黑底、无 ActionBar。
+  语义色取自 outputs/腕上工坊-界面设计/设计变量.json：
+  accent #EBC16C / textPrimary #F0F3FA / textSecondary #A4AEC0 / textTertiary #748095
+  仅使用 android:* 原生属性，避免任何 support/androidx 依赖。
+-->
+<resources>
+
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <!-- 纯黑底，适配 AMOLED 手表 -->
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:windowIsFloating">false</item>
+
+        <!-- 系统栏与图标：黑底 + 浅色图标（windowLightStatusBar 需要 API 23+） -->
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- 主色与强调色 -->
+        <item name="android:colorPrimary">@android:color/black</item>
+        <item name="android:colorPrimaryDark">@android:color/black</item>
+        <item name="android:colorBackgroundFloating">#12161E</item>
+        <item name="android:colorAccent">#EBC16C</item>
+
+        <!-- 文本层级 -->
+        <item name="android:textColorPrimary">#F0F3FA</item>
+        <item name="android:textColorSecondary">#A4AEC0</item>
+        <item name="android:textColorTertiary">#748095</item>
+        <item name="android:textColorHint">#748095</item>
+
+        <!-- 无标题栏、无 ActionBar -->
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <!-- 关闭系统“右滑直接关闭”，由 MainActivity 的右滑手势逐级返回 -->
+        <item name="android:windowSwipeToDismiss">false</item>
+    </style>
+
+</resources>

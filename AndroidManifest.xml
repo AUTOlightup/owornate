@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  OWOrnate - 手表侧原生管理器
+  包名 dev.codex.watchworkshop / minSdk 26 / targetSdk 27 / compileSdk 35
+  v1.0.0 (versionCode 7) - 公开发布候选，空白表实测通过前不当作已验收
+
+  安全边界（本轮刻意保持最小暴露面）：
+  - 只申请 INTERNET 与 RECEIVE_BOOT_COMPLETED，不申请存储、root、无障碍绑定以外的权限。
+  - 只有一个带 LAUNCHER 入口的 Activity。
+  - RuntimeBootReceiver 只处理 BOOT_COMPLETED 与 MY_PACKAGE_REPLACED，且只在已有本包
+    独立目录时做一次 ensure，不执行任意 shell、不创建缺失目录、不接管生产组件。
+  - RuntimeAccessibility 由独立安装流程启用，兼容模式不启用；构建只打包。
+    它只处理 Launcher 事件，不读取窗口内容；只有持有 BIND_ACCESSIBILITY_SERVICE 的系统
+    能绑定它，不监听端口、不导出调试入口。
+  - 没有 JobService、没有常驻后台服务。
+  - 不声明或替换任何 Bootstrap 组件，不与 watchhide bootstrap 共用组件名或权限。
+  - 不在构建阶段安装或连接设备，APK 只落到 dist 目录。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.codex.watchworkshop"
+    android:versionCode="7"
+    android:versionName="1.0.0">
+
+    <uses-sdk
+        android:minSdkVersion="26"
+        android:targetSdkVersion="27" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:allowBackup="false"
+        android:debuggable="false"
+        android:icon="@drawable/ic_launcher"
+        android:label="OWOrnate"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <!-- 桌面启动入口。 exported 仅服务于 LAUNCHER，不做命令行入口。 -->
+        <activity
+            android:name="dev.codex.watchworkshop.MainActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="true"
+            android:label="OWOrnate"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          受控启动检查：只处理开机完成与本次安装/更新完成两个合法广播。
+          只做一次本包自有目录 ensure；没有现成本包独立目录时不创建、不接管任何生产组件，
+          也不执行任意 shell。
+        -->
+        <receiver
+            android:name="dev.codex.watchworkshop.RuntimeBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          无障碍服务：只有用户在系统设置里手动开启后才会被系统绑定。
+          只处理 Launcher 事件，不读取窗口内容；这里只声明能力，
+          不 enable、不自动授予、不做后台常驻。
+        -->
+        <service
+            android:name="dev.codex.watchworkshop.RuntimeAccessibility"
+            android:exported="true"
+            android:label="OWOrnate"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/runtime_accessibility" />
+        </service>
+    </application>
+
+</manifest>
