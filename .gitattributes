@@ -1,0 +1,4 @@
+# Keep deployment payload bytes identical to the hashes checked by the manager.
+/assets/** -text
+/widget-host/** -text
+/standalone/** -text

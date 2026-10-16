@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 已过状态的灰点：过期不用强调色。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#FF85858C" />
+    <size
+        android:width="5dp"
+        android:height="5dp" />
+</shape>
+

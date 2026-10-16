@@ -20,7 +20,7 @@
 
 - helper 运行在 Launcher 进程内，用 HCT 从当前表盘派生配色，并按 `mode` / `seed` / `corners` 应用。
 - 控制通道是 Launcher 私有目录里的闭合 mailbox：app 写一条固定格式 `request.json`，helper 用 `FileObserver` 响应并写 `ack.json` 回执；app 不提供任意 shell 或外部端口入口。
-- 双模式：独立模式使用本包运行目录 `/data/local/tmp/watchworkshop-runtime`，莫奈文件由管理器 APK 内置资源在表端安装；共享模式要求既有 watchhide v9 + helper v6，识别后直接管理，不替换共享运行文件。
+- 双模式：独立模式使用本包运行目录 `/data/local/tmp/watchworkshop-runtime`，莫奈文件由管理器 APK 内置资源在表端安装；共享模式支持已知 watchhide v9/v10/v11 + helper v6，识别后直接管理，不替换共享运行文件。
 - 协议、会话、过期与错误码见 `PROTOCOL.md`。
 
 注入脚本只处理控制中心外观，不涉及 NFC、WatchHide、QQ、蓝点或全局 View Hook。
@@ -32,6 +32,8 @@ pwsh -File .\build.ps1 -SdkRoot <AndroidSDK> -JdkHome <JDK>
 ```
 
 产物为 `dist/WatchTheme-helper-v6.jar`。构建只用 JDK 与 Android SDK（platform 与 build-tools 中的 d8），不联网。
+
+这个脚本直接取 `<AndroidSDK>/platforms/android-35/android.jar` 与 `<AndroidSDK>/build-tools/35.0.0/lib/d8.jar`，没有版本回退：本机缺少 android-35 或 build-tools 35.0.0 时构建直接失败。管理器的发布包已经带同一份 `assets/monet/theme.jar`（helper v6，SHA256 `706205ab96a67bfca062bca5152f89fe7cfaddc5ed9db2fe121d1697723dca74`），只有需要重建主题运行件时才跑这里的构建。
 
 ## 分发与部署
 

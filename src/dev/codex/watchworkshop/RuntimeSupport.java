@@ -1,7 +1,6 @@
 package dev.codex.watchworkshop;
 
 import android.content.Context;
-import java.io.File;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Finite startup recovery for this package's standalone installation only. */
@@ -17,13 +16,12 @@ final class RuntimeSupport {
     static void ensureAsync(Context context,boolean boot){final Context app=context.getApplicationContext();new Thread(()->ensure(app,boot),"workshop-startup").start();}
     static void ensure(Context context,boolean boot){
         if(!RUNNING.compareAndSet(false,true))return;
-        try{RsaKeyStore keys=new RsaKeyStore(new File(context.getFilesDir(),"adb"));
-            try(AdbClient adb=AdbClient.open(1200,4500,keys.privateKey(),keys.publicKeyLine())){
+        try{RootShell.session(context,1200,4500,adb->{
                 String raw=adb.shell(COMMAND,7500);int rc=adb.exitCode();
                 android.content.SharedPreferences.Editor e=context.getSharedPreferences("runtime",0).edit().putLong("time",System.currentTimeMillis()).putString("result",rc==0?"启动检查完成":"启动未完成，请重新检查");
                 if(boot){int start=raw.indexOf("__BOOT__");if(start>=0){String id=raw.substring(start+8).split("[\\r\\n]",2)[0].trim();if(id.matches("[a-fA-F0-9-]{36}"))e.putString("bootId",id).putBoolean("bootOk",rc==0);}}
-                e.commit();
-            }
+                return e.commit();
+            });
         }catch(Exception e){context.getSharedPreferences("runtime",0).edit().putString("result","启动未完成，请检查本机授权").apply();}
         finally{RUNNING.set(false);}
     }

@@ -40,10 +40,13 @@ esac
     (source/'monet-service.sh').write_text('#!/bin/sh\necho "$1" >> ./actions\nexit 0\n',newline='\n')
     frida=b'test platform dependency'
     shared=b'existing unrelated shared hook'
+    shared_v10=b'existing v10 shared hook'
+    unknown_shared=b'unknown shared hook'
     control=(project/'standalone'/'module-manage.sh').read_text(encoding='utf-8')
+    check('0a5654f86c5fa2570d74f9877ff9abe974dcb82ba71c66869b4607f09182c07d' in control,'script pins the shared Hook v10 baseline')
     control=control.replace('BASE=/data/local/tmp/watchworkshop-runtime','BASE=./base').replace('SOURCE=/data/user/0/dev.codex.watchworkshop/files/monet','SOURCE=./source')
     control=control.replace('/data/local/tmp/watchhide/hook.js','./shared.js').replace('/data/local/tmp/watch-monet/hook.js','./legacy.js').replace('/data/local/tmp/watchface-theme/theme.jar','./shared-theme.jar').replace('/proc/','./proc/')
-    control=control.replace('e865f8746cee97761af50a31528315baf14cc047eedd35242f30a744b91d25ea',hashlib.sha256(frida).hexdigest()).replace('6e46e44d3b4f5fc2162b60dd90b5de2b3c2e4f4cfcf50d87eee5c5071883f722',hashlib.sha256(shared).hexdigest())
+    control=control.replace('e865f8746cee97761af50a31528315baf14cc047eedd35242f30a744b91d25ea',hashlib.sha256(frida).hexdigest()).replace('6e46e44d3b4f5fc2162b60dd90b5de2b3c2e4f4cfcf50d87eee5c5071883f722',hashlib.sha256(shared).hexdigest()).replace('0a5654f86c5fa2570d74f9877ff9abe974dcb82ba71c66869b4607f09182c07d',hashlib.sha256(shared_v10).hexdigest())
     # kill is the one process primitive unavailable on the simulated Android host.
     control='export PATH="$PWD/bin:$PATH"\nkill() { echo "kill $*" >> ./actions; }\n'+control
     (root/'control.sh').write_text(control,encoding='utf-8',newline='\n')
@@ -83,9 +86,17 @@ esac
     check(run('status')=='available' and not (base/'theme.jar').exists(),'failed staging is retryable')
     (source/'service.saved').rename(source/'monet-service.sh')
     (root/'shared.js').write_bytes(shared);shutil.copyfile(source/'theme.jar',root/'shared-theme.jar')
-    check(run('status')=='shared','shared detected')
+    check(run('status')=='shared','shared Hook v9 detected')
     for action in ('install','enable','disable','uninstall'):run(action,ok=False)
     check((root/'shared.js').read_bytes()==shared,'shared hook never changed by private lifecycle')
+    (root/'shared.js').write_bytes(shared_v10)
+    check(run('status')=='shared','shared Hook v10 accepted with the helper v6 theme')
+    for action in ('install','enable','disable','uninstall'):run(action,ok=False)
+    check((root/'shared.js').read_bytes()==shared_v10,'v10 shared hook never changed by private lifecycle')
+    (root/'shared.js').write_bytes(unknown_shared)
+    check(run('status')=='conflict','unknown shared hook rejected')
+    run('install',ok=False)
+    check((root/'shared.js').read_bytes()==unknown_shared,'unknown shared hook preserved')
     (root/'shared.js').unlink();(root/'legacy.js').write_text('old runtime')
     check(run('status')=='conflict','legacy conflict');run('install',ok=False)
     (root/'legacy.js').unlink()

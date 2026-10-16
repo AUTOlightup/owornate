@@ -1,7 +1,7 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-    构建 OWOrnate 原生 Android 管理器 APK（v1.0.0 / versionCode 7）。
+    构建 OWOrnate 原生 Android 管理器 APK（版本号读自 AndroidManifest.xml）。
 
 .DESCRIPTION
     独立 Java 8 + 原生 Views 工程，无第三方依赖。
@@ -86,6 +86,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Ship the same fixed widget-host payload used by the desktop fallback.
+New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'assets/widget-host') | Out-Null
+foreach($name in @('widget-manage.sh','WatchHide-Launcher-Hook-v11.js')) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "widget-host/$name") -Destination (Join-Path $PSScriptRoot "assets/widget-host/$name")
+}
+
 Set-StrictMode -Version Latest
 
 # ---------------------------------------------------------------------------
@@ -93,8 +99,10 @@ Set-StrictMode -Version Latest
 # ---------------------------------------------------------------------------
 $PackageName         = 'dev.codex.watchworkshop'
 $MainActivityName    = 'dev.codex.watchworkshop.MainActivity'
-$VersionName         = '1.0.0'
-$VersionCode         = 7
+# 版本号只在 AndroidManifest.xml 里维护；这里和 make-release.ps1 都从它读取，不再两处手工同步。
+[xml]$versionSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'AndroidManifest.xml') -Raw -Encoding UTF8
+$VersionName         = $versionSource.manifest.GetAttribute('versionName', 'http://schemas.android.com/apk/res/android')
+$VersionCode         = [int]$versionSource.manifest.GetAttribute('versionCode', 'http://schemas.android.com/apk/res/android')
 $MinSdkVersion       = 26
 $TargetSdkVersion    = 27
 $CompileSdkVersion   = 35
@@ -423,6 +431,8 @@ Copy-Item -LiteralPath $AssetsDir -Destination $stageInput -Recurse -Force
 $compiledRes = Join-Path $stagingRoot 'resources.zip'
 $unsignedApk = Join-Path $stagingRoot 'app-unsigned.apk'
 $alignedApk  = Join-Path $stagingRoot 'app-aligned.apk'
+$generatedJava = Join-Path $stageInput 'generated-java'
+New-Item -ItemType Directory -Path $generatedJava -Force | Out-Null
 
 & $aapt2Exe compile --dir $stageRes -o $compiledRes
 if ($LASTEXITCODE -ne 0) { throw 'aapt2 compile 失败' }
@@ -436,6 +446,7 @@ $aapt2LinkArgs = @(
     '--target-sdk-version', $TargetSdkVersion,
     '--version-code', $VersionCode,
     '--version-name', $VersionName,
+    '--java', $generatedJava,
     '-A', $stageAssets,
     $compiledRes
 )
@@ -470,9 +481,16 @@ $javacArgs = @(
     '-Xlint:-options',
     '-classpath', $androidJar,
     '-d', $classesDir
-) + $javaSources
+) + $javaSources + @(Get-ChildItem -LiteralPath $generatedJava -Filter '*.java' -Recurse -File | ForEach-Object { $_.FullName })
+# javac writes a deprecation NOTE to stderr (harmless; it still exits 0). Under
+# $ErrorActionPreference='Stop' any native stderr aborts the script before the
+# exit-code check, so drop to Continue just for this call and gate on the code.
+$savedEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 & $javacExe @javacArgs
-if ($LASTEXITCODE -ne 0) { throw 'javac 编译失败' }
+$javacExit = $LASTEXITCODE
+$ErrorActionPreference = $savedEap
+if ($javacExit -ne 0) { throw 'javac 编译失败' }
 
 $classFiles = @(Get-ChildItem -LiteralPath $classesDir -Filter '*.class' -Recurse -File | ForEach-Object { $_.FullName })
 if ($classFiles.Count -eq 0) { throw ('编译未产出 class 文件: ' + $classesDir) }
@@ -480,7 +498,11 @@ if ($classFiles.Count -eq 0) { throw ('编译未产出 class 文件: ' + $classe
 # ---------------------------------------------------------------------------
 # 6. dex（d8）
 # ---------------------------------------------------------------------------
-$d8Args = @('--min-api', $MinSdkVersion, '--lib', $androidJar, '--output', $dexDir) + $classFiles
+$classesJar = Join-Path $stagingRoot 'classes.jar'
+& (Join-Path $jdkRootPath 'bin\jar.exe') cf $classesJar -C $classesDir .
+if ($LASTEXITCODE -ne 0) { throw 'class JAR 打包失败' }
+# A single JAR also keeps d8.bat below cmd.exe's command-line length limit.
+$d8Args = @('--min-api', $MinSdkVersion, '--lib', $androidJar, '--output', $dexDir, $classesJar)
 & $d8Bat @d8Args
 if ($LASTEXITCODE -ne 0) { throw 'd8 失败' }
 
@@ -490,6 +512,7 @@ if (-not (Test-Path -LiteralPath $dexFile -PathType Leaf)) { throw 'd8 未生成
 # ---------------------------------------------------------------------------
 # 7. 把 classes.dex 写进 APK
 # ---------------------------------------------------------------------------
+Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::Open($unsignedApk, [System.IO.Compression.ZipArchiveMode]::Update)
 try {

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  骨架预览 181x100dp：只画墨夜背景和灰色占位条，不画任何数字和文字。
+  占位条位置对应设计稿的标题行、数字行、底行与进度条。
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="16dp" />
+            <gradient
+                android:angle="270"
+                android:endColor="#FF141519"
+                android:startColor="#FF1E1F24" />
+        </shape>
+    </item>
+    <!-- 标题条 @ (12,15) 60x8 -->
+    <item
+        android:bottom="77dp"
+        android:left="12dp"
+        android:right="109dp"
+        android:top="15dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="4dp" />
+            <solid android:color="#33F2F2F4" />
+        </shape>
+    </item>
+    <!-- 天数条 @ (12,32) 78x22 -->
+    <item
+        android:bottom="46dp"
+        android:left="12dp"
+        android:right="91dp"
+        android:top="32dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="#3DF2F2F4" />
+        </shape>
+    </item>
+    <!-- 单位条 @ (94,44) 14x8 -->
+    <item
+        android:bottom="48dp"
+        android:left="94dp"
+        android:right="73dp"
+        android:top="44dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="4dp" />
+            <solid android:color="#33F2F2F4" />
+        </shape>
+    </item>
+    <!-- 日期条 @ (12,78) 50x6 -->
+    <item
+        android:bottom="16dp"
+        android:left="12dp"
+        android:right="119dp"
+        android:top="78dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="#2EFFFFFF" />
+        </shape>
+    </item>
+    <!-- 进度条 @ (117,79) 40x3 -->
+    <item
+        android:bottom="18dp"
+        android:left="117dp"
+        android:right="24dp"
+        android:top="79dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="2dp" />
+            <solid android:color="#2EFFFFFF" />
+        </shape>
+    </item>
+</layer-list>
+

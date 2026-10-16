@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 标题行强调色圆点 10px（5dp）。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#FFFF9F43" />
+    <size
+        android:width="5dp"
+        android:height="5dp" />
+</shape>
+

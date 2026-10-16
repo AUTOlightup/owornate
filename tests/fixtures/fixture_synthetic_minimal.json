@@ -1,0 +1,63 @@
+{
+  "courses": [
+    {
+      "name": "合成课程·甲",
+      "teacher": "合成教师·甲",
+      "position": "合成楼 A-101",
+      "day": 1,
+      "startSection": 1,
+      "endSection": 2,
+      "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+      "isCustomTime": false,
+      "customStartTime": null,
+      "customEndTime": null,
+      "color": 0,
+      "remark": null,
+      "credit": 3.0
+    },
+    {
+      "name": "合成课程·乙",
+      "teacher": "合成教师·乙",
+      "position": "合成楼 B-203",
+      "day": 3,
+      "startSection": 3,
+      "endSection": 3,
+      "weeks": [1, 3, 5, 7, 9, 11, 13, 15],
+      "isCustomTime": false,
+      "customStartTime": null,
+      "customEndTime": null,
+      "color": 1,
+      "remark": "合成备注：单周",
+      "credit": null
+    },
+    {
+      "name": "合成课程·丙",
+      "teacher": "合成教师·丙",
+      "position": "合成实验楼 C-001",
+      "day": 5,
+      "startSection": null,
+      "endSection": null,
+      "weeks": [2, 4, 6, 8, 10, 12, 14, 16],
+      "isCustomTime": true,
+      "customStartTime": "19:00",
+      "customEndTime": "20:30",
+      "color": 2,
+      "remark": null,
+      "credit": 1.5
+    }
+  ],
+  "timeSlots": [
+    { "number": 1, "startTime": "08:00", "endTime": "08:45", "alias": null },
+    { "number": 2, "startTime": "08:55", "endTime": "09:40", "alias": null },
+    { "number": 3, "startTime": "10:00", "endTime": "10:45", "alias": "合成" },
+    { "number": 4, "startTime": "10:55", "endTime": "11:40", "alias": null }
+  ],
+  "config": {
+    "semesterStartDate": "2026-03-02",
+    "semesterTotalWeeks": 20,
+    "defaultClassDuration": 45,
+    "defaultBreakDuration": 10,
+    "firstDayOfWeek": 1
+  },
+  "comboSchedule": null
+}

@@ -2,7 +2,6 @@ package dev.codex.watchworkshop;
 
 import android.content.Context;
 import android.util.Base64;
-import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 import org.json.JSONObject;
@@ -10,16 +9,19 @@ import org.json.JSONObject;
 /** Closed theme protocol; no caller-controlled shell or file paths. */
 final class ThemeRuntime {
     private static final String DIR="/data/user_de/0/com.heytap.wearable.launcher/files/watchworkshop-theme";
-    private static String shell(Context context,String command)throws Exception {
-        RsaKeyStore keys=new RsaKeyStore(new File(context.getFilesDir(),"adb"));
-        try(AdbClient adb=AdbClient.open(1800,12000,keys.privateKey(),keys.publicKeyLine())){
-            String result=adb.shell(command,15000);
-            if(adb.exitCode()!=0)throw new IOException("本机主题通道未完成操作");return result;
-        }
+    private static String shell(AdbClient adb,String command)throws Exception {
+        String result=adb.shell(command,15000);
+        if(adb.exitCode()!=0)throw new IOException("本机主题通道未完成操作");
+        return result;
     }
-    static synchronized JSONObject exchange(Context context,String action,ThemeConfig config)throws Exception {
+    /** 单独一次交互：自己开一个连接。 */
+    static JSONObject exchange(Context context,String action,ThemeConfig config)throws Exception {
+        return RootShell.session(context,1800,12000,adb->exchange(adb,action,config));
+    }
+    /** 在调用方已经打开的连接上交互；读 hello 和提交请求共用这一个连接。 */
+    static synchronized JSONObject exchange(AdbClient adb,String action,ThemeConfig config)throws Exception {
         if(!"read".equals(action)&&!"preview".equals(action)&&!"apply".equals(action)&&!"rollback".equals(action))throw new IllegalArgumentException("Theme action");
-        String raw=shell(context,"test \"$(id -u)\" = 0 && cat "+DIR+"/hello.json && echo; pidof com.heytap.wearable.launcher");
+        String raw=shell(adb,"test \"$(id -u)\" = 0 && cat "+DIR+"/hello.json && echo; pidof com.heytap.wearable.launcher");
         int end=raw.lastIndexOf('}');if(end<0)throw new IOException("主题组件未加载，请按首次设置安装或检查运行环境");
         JSONObject hello=new JSONObject(raw.substring(0,end+1));
         if(hello.getInt("protocol")!=1||hello.getInt("helperVersion")!=6||!Integer.toString(hello.getInt("pid")).equals(raw.substring(end+1).trim()))throw new IOException("主题接口版本或进程不匹配");
@@ -30,7 +32,7 @@ final class ThemeRuntime {
         String command="test \"$(id -u)\" = 0 && test -d "+DIR+" && printf '%s' '"+encoded+"' | base64 -d > "+DIR+"/request.tmp && "
             +"chown \"$(stat -c '%u:%g' "+DIR+")\" "+DIR+"/request.tmp && chmod 600 "+DIR+"/request.tmp && mv "+DIR+"/request.tmp "+DIR+"/request.json && "
             +"n=0; while [ \"$n\" -lt 100 ]; do if grep -q '"+id+"' "+DIR+"/ack.json 2>/dev/null; then echo __ACK__; cat "+DIR+"/ack.json; echo; exit 0; fi; printf '.'; sleep 0.1; n=$((n+1)); done; exit 1";
-        String response=shell(context,command);int marker=response.indexOf("__ACK__");
+        String response=shell(adb,command);int marker=response.indexOf("__ACK__");
         if(marker<0)throw new IOException("等待主题确认超时，请重新读取状态");
         JSONObject ack=new JSONObject(response.substring(marker+7).trim());
         if(ack.getInt("protocol")!=1||!id.equals(ack.getString("id"))||!session.equals(ack.getString("session"))||ack.getInt("pid")!=hello.getInt("pid"))throw new IOException("主题回执身份不匹配");

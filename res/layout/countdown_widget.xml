@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  倒计时组件 v1（设计 v0.1 第 2 节）。画布 181x100dp。
+  根布局自带不透明圆角底（墨夜），既盖住宿主可能拿来当背景的预览图，也满足“宿主不裁圆角”。
+  所有位置按设计稿的卡片内 px/2：标题行 y20、数字行 y56 h84、底行 y150，内边距左右 24px 上下 20px。
+  只用 API 27 RemoteViews 允许的视图：FrameLayout / LinearLayout / ImageView / TextView / Chronometer / ProgressBar。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/countdown_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="100dp"
+    android:background="@drawable/countdown_surface">
+
+    <!-- 状态光晕（右上角，越接近“现在”越亮）；过期与空状态隐藏。 -->
+    <ImageView
+        android:id="@+id/countdown_glow"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:scaleType="fitXY"
+        android:src="@drawable/countdown_glow_far" />
+
+    <LinearLayout
+        android:id="@+id/countdown_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingLeft="12dp"
+        android:paddingTop="10dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="10dp">
+
+        <!-- 标题行 y20 h30：10px 强调色圆点 + 标题 13sp + 可选描边胶囊 10sp -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/countdown_dot"
+                android:layout_width="5dp"
+                android:layout_height="5dp"
+                android:src="@drawable/countdown_dot" />
+
+            <TextView
+                android:id="@+id/countdown_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:textColor="#F2F2F4"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/countdown_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/countdown_badge"
+                android:paddingLeft="6dp"
+                android:paddingTop="1dp"
+                android:paddingRight="6dp"
+                android:paddingBottom="1dp"
+                android:textColor="#ABABB2"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <!-- 数字行 y56 h84：前缀 12sp + 数值 36sp Medium + 单位 14sp，基线对齐；时刻型换 Chronometer 30sp -->
+        <LinearLayout
+            android:id="@+id/countdown_line"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:layout_marginTop="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/countdown_prefix"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#ABABB2"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/countdown_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:fontFamily="sans-serif-medium"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="#F2F2F4"
+                android:textSize="36sp" />
+
+            <Chronometer
+                android:id="@+id/countdown_timer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:countDown="true"
+                android:format="%s"
+                android:textColor="#F2F2F4"
+                android:textSize="30sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/countdown_unit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:textColor="#ABABB2"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- 底行 y150 h28：目标日期 11sp + 进度条 80x6px（40x3dp）+ 百分比 11sp -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:gravity="center_vertical"
+            android:minHeight="14dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/countdown_detail"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#ABABB2"
+                android:textSize="11sp" />
+
+            <ProgressBar
+                android:id="@+id/countdown_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="40dp"
+                android:layout_height="3dp"
+                android:layout_marginStart="6dp"
+                android:max="100"
+                android:progressDrawable="@drawable/countdown_progress" />
+
+            <TextView
+                android:id="@+id/countdown_percent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:textColor="#85858C"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 空状态 / 不可用：左上组件名，y74 起 60px 圆形图标 + 主句 14sp + 提示 11sp -->
+    <LinearLayout
+        android:id="@+id/countdown_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingLeft="12dp"
+        android:paddingTop="10dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:text="倒计时"
+            android:textColor="#ABABB2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:minHeight="30dp"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:src="@drawable/countdown_ring" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/countdown_empty_main"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:textColor="#F2F2F4"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/countdown_empty_hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#ABABB2"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>
+

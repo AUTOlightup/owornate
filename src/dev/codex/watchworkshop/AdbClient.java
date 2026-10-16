@@ -37,7 +37,6 @@ final class AdbClient implements Closeable {
     private static final int AUTH_SIGNATURE = 2;
     private static final int AUTH_RSAPUBLICKEY = 3;
     private static final int MAX_AUTH_ATTEMPTS = 3;
-    private static final int LOCAL_ID = 1;
     private static final String RC_MARKER = "__WORKSHOP_RC=";
     // adbd passes the 20-byte AUTH token to RSA_sign(NID_sha1) as an already
     // computed digest. SHA1withRSA would hash the token a second time.
@@ -52,6 +51,7 @@ final class AdbClient implements Closeable {
     private final PrivateKey key;
     private final String publicKeyLine;
     private int exitCode = -1;
+    private int nextLocalId = 1;
 
     private AdbClient(Socket socket, PrivateKey key, String publicKeyLine) throws IOException {
         this.socket = socket;
@@ -91,31 +91,47 @@ final class AdbClient implements Closeable {
         return exitCode;
     }
 
-    /** 在设备上跑一条 shell 命令，返回合并后的输出（不含退出码标记行）。 */
+    /**
+     * 在设备上跑一条 shell 命令，返回合并后的输出（不含退出码标记行）。
+     *
+     * <p>同一个连接可以连续调用多次：每条命令用一个新的本地流编号，属于先前流的迟到报文
+     * （比如 adbd 对已结束流补发的 CLSE）按编号忽略。这样一次操作只握手、签名一次。
+     * 等待只受 totalTimeoutMs 约束：命令中途安静几秒（比如重启 Launcher 后等待加载）不算超时。
+     */
     String shell(String command, long totalTimeoutMs) throws IOException {
         String wrapped = "(" + command + "); echo \"" + RC_MARKER + "$?\"";
-        send(CMD_OPEN, LOCAL_ID, 0, asciiNul("shell:" + wrapped));
+        int local = nextLocalId++;
+        int remote = 0;
+        exitCode = -1;
+        send(CMD_OPEN, local, 0, asciiNul("shell:" + wrapped));
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         long deadline = System.currentTimeMillis() + totalTimeoutMs;
         while (true) {
             long remaining = deadline - System.currentTimeMillis();
             if (remaining <= 0) throw new SocketTimeoutException("shell timeout");
-            Message message = readMessage((int) Math.min(remaining, 5000));
-            if (message.command == CMD_OKAY) continue;
+            Message message = readMessage((int) Math.min(remaining, Integer.MAX_VALUE));
+            if (message.arg1 != local) continue;
+            if (message.command == CMD_OKAY) {
+                remote = message.arg0;
+                continue;
+            }
             if (message.command == CMD_WRTE) {
+                remote = message.arg0;
                 stdout.write(message.data);
-                send(CMD_OKAY, LOCAL_ID, message.arg0, null);
+                send(CMD_OKAY, local, remote, null);
                 // Android 8.1 adbd may keep the shell channel open for a
                 // background child even after the command has returned.
                 // The exit marker is emitted last by our wrapper, so it is
-                // enough to finish without waiting for a remote CLSE.
+                // enough to finish without waiting for a remote CLSE; closing
+                // our side lets the next command reuse this connection.
                 if (hasCompleteExitMarker(stdout.toByteArray())) {
+                    send(CMD_CLSE, local, remote, null);
                     return decode(stdout.toByteArray());
                 }
                 continue;
             }
             if (message.command == CMD_CLSE) {
-                send(CMD_CLSE, LOCAL_ID, message.arg0, null);
+                send(CMD_CLSE, local, message.arg0, null);
                 return decode(stdout.toByteArray());
             }
             throw new IOException("unexpected message " + name(message.command));

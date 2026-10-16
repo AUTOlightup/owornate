@@ -31,7 +31,7 @@
     待部署的本机 jar，默认 <脚本目录>\runtime-helper\dist\WatchTheme-helper-v6.jar。
 
 .PARAMETER ExpectedHookSha
-    现有综合 Hook 的 SHA256 基线；不一致即中止。
+    现有综合 Hook 的 SHA256 基线；默认接受已知 v9/v10，显式传参时严格匹配。
 
 .PARAMETER OldThemeSha
     设备原有 helper v5 的 SHA256，允许作为部署前状态。
@@ -165,6 +165,9 @@ if ($uid -ne '0') {
 # 2. 综合 Hook 基线与 supervisor 存在性（只核对，不修改）
 # ---------------------------------------------------------------------------
 $hookSha = Get-DeviceSha -Path $HookPath
+if (-not $PSBoundParameters.ContainsKey('ExpectedHookSha') -and $hookSha -eq '0a5654f86c5fa2570d74f9877ff9abe974dcb82ba71c66869b4607f09182c07d') {
+    $ExpectedHookSha = $hookSha
+}
 Assert-Sha -Label '综合 Hook' -Actual $hookSha -Expected $ExpectedHookSha
 Write-Host ('综合 Hook 基线一致：' + $hookSha)
 

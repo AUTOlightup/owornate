@@ -1,69 +1,54 @@
-# 从源码构建
+# 源码与打包
 
-本文件说明如何从源码构建管理器 APK 与内置莫奈模块。构建不联网、不安装、不连接设备，只把产物写到本项目输出目录。
+**预发布版本：1.0.1-rc6 / versionCode 15。** 已生成同签名 APK `dist/OWOrnate-v1.0.1-rc6.apk`；Windows 包、源码包与摘要由 `make-release.ps1` 统一生成，随 [v1.0.1-rc6](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc6) 提供。
 
-## 应用（管理器 + 内置莫奈模块）
+## 源码范围
 
-入口是仓库根的 `build.ps1`。参数与环境变量均无硬编码机器路径，命令行参数优先于环境变量，其次才查 PATH 与常见安装位置。
+发布源码归档需包含管理器源码、构建与安装脚本、`widget-host/` 目录及其脚本（含 `WatchHide-Launcher-Hook-v11.js` 与 `widget-manage.sh`）、`assets/monet/` 与 `runtime-helper/`，并保留仓库许可证和第三方许可证。不得包含签名私钥、密钥口令、ADB 私钥、设备备份或个人日志。
 
-| 参数 | 环境变量 | 说明 |
-| --- | --- | --- |
-| `-SdkRoot` | `WATCHWORKSHOP_ANDROID_SDK` / `ANDROID_SDK_ROOT` / `ANDROID_HOME` | 含 build-tools 与 platforms 的 Android SDK 根目录 |
-| `-JdkHome` | `WATCHWORKSHOP_JDK` / `JAVA_HOME` | 含 bin\javac.exe 的 JDK 根目录 |
-| `-BuildRoot` | `WATCHWORKSHOP_BUILD_DIR` | 纯 ASCII 中间构建目录 |
-| `-SigningDir` | `WATCHWORKSHOP_SIGNING_DIR` | 工程之外的私有签名目录 |
-| `-KeystorePath` | `WATCHWORKSHOP_KEYSTORE` | 签名库完整路径 |
-| `-KeyAlias` | `WATCHWORKSHOP_KEY_ALIAS` | 签名别名 |
-| `-SigningProperties` | — | 私有 properties 文件，提供口令与通道标记 |
-| `-NoClean` | — | 保留已有构建目录内容 |
-| `-PublicRelease` | — | 按公开发布名产出，并校验产物不是 debuggable |
+保留根目录 `.gitattributes`：`assets/`、`widget-host/` 与 `standalone/` 按原始字节存入和检出，确保 Windows Git 的换行转换不改写管理器校验的 Hook 指纹。
 
-口令只走环境变量或工程外的私有 properties，不写入源码。
+`widget-host/` 的共享环境接入材料用于已知 Hook v9/v10/v11 + helper v6 环境。源码包含这些脚本不表示支持任意 Hook、helper、设备或独立宿主环境。独立莫奈仍可用；独立宿主的小组件接入暂未支持。
 
-构建公开发布候选件：
+负一屏“统一编辑器 / 首页重排”与滑动修复已放弃：源码与打包管线中不再有 `quickcenter/` 模块、`quickcenter.jar` 或相关测试，`make-release.ps1` 的源码清单也已移除该项（Hook 里的 “QuickCenter” 是负一屏自身的类名，保留）。
 
-```powershell
-pwsh -File .\build.ps1 -SdkRoot <AndroidSDK> -JdkHome <JDK> `
-  -SigningProperties <私有properties> -PublicRelease
-```
+## 构建与发布
 
-产物为 `dist/OWOrnate-v1.0.0.apk`，内置莫奈模块（`assets/monet/`）。不带 `-PublicRelease` 时按签名通道命名。工具链找不到时带明确提示失败，不会猜一个 SDK 或 JDK 继续。
+遵循仓库根目录构建说明生成候选 APK 与 Windows 包。发布包需要包含电脑备用入口 `02-EnableWidgets.cmd`。源码归档清单应验证 `widget-host/` 与脚本确实进入压缩包，并检查许可证保留和敏感文件排除。
 
-## 内置莫奈模块（theme.jar）
+本版 APK 为 `OWOrnate-v1.0.1-rc6.apk`，versionCode 15，沿用原签名且不可调试，250,364 bytes，SHA256 `31098f0462072b47653170895e28e369773ea5e8b8de5ce747e44755883bb055`。文件摘要见交付目录 SHA256SUMS.txt。本轮发布不重建 APK，附件沿用该 APK 字节。
 
-入口是 `runtime-helper/build.ps1`，只编译 `native-src/` 与 `vendor/`，使用 JDK 与 Android SDK 的 platform、build-tools 中的 d8：
+打包内容：Windows 包与管理器源码包带 `docs/`，`README-public.md` 复制为包根 `README.md`，其中 `docs/README-public.md` 的链接前缀会相应调整；`docs/screenshots/` 是历史验证记录引用的证据，随引用它们的记录一起保留；工程根目录的 `screenshots/` 不进包。源码包另带 `runtime-helper/`，主题包带 `standalone/`、`licenses/` 与 `PROTOCOL.md`。打包脚本一旦在源码清单里发现签名或密钥材料（`*.jks`、`*.keystore`、`adbkey`、`signing*.properties` 等）就中止。
+
+## 功能范围
+
+首页直接列出已安装的功能（负一屏小组件、莫奈取色），“发现优化”只在还有可安装项时出现。三类小组件为 OWOrnate 信息、倒计时和课表，卡片尺寸 181×100dp；倒计时可显示系统“纪念日”里的日子（只读接入）。课表支持拾光单表 JSON，不支持 ICS、完整备份或通用皮肤导入。没有在线目录，也没有应用内自动更新。
+
+历史验证（非本版）：code8 课表四项用户实测通过；code9 共享 Hook v10 的 Launcher 重载恢复通过；另有生命周期 68/68、倒计时 94、解析 149、焦点 136 等记录。code15 构建后没有整体重跑离线测试。
+
+## 从源码构建
+
+构建需要 JDK 21 与同时含 `platforms`、`build-tools` 的 Android SDK；`build.ps1` 优先使用 build-tools 35.0.0 与 `platforms\android-35`，缺失时自动改用已安装的版本并给出提示。在源码根目录执行：
 
 ```powershell
-pwsh -File .\runtime-helper\build.ps1 -SdkRoot <AndroidSDK> -JdkHome <JDK>
+./build.ps1 -PublicRelease -SdkRoot '<Android SDK>' -JdkHome '<JDK>' -BuildRoot '<纯英文构建目录>' -SigningDir '<工程外签名目录>'
+./make-release.ps1 -AdbDirectory '<platform-tools>' -FridaInject '<已有匹配版本的frida-inject>' -ReleaseRoot '<不存在的输出目录>'
 ```
 
-产物为 `runtime-helper/dist/WatchTheme-helper-v6.jar`。源码包已携带当前适配的 `assets/monet/theme.jar`，随管理器 APK 一起签名。重建 helper 后，需要手动将新 JAR 复制到该资产位置。`build.ps1` 会从 `standalone/` 同步三个脚本到 APK 资产目录。
+签名材料不随源码分发；换签名无法覆盖已有正式安装。构建只产出 APK，不连接设备或运行测试。打包脚本从 `AndroidManifest.xml` 读取版本（当前 15 / 1.0.1-rc6），生成 Windows 入口、源码归档和 SHA256SUMS.txt。
 
-## 可复现性
+## 构建前提
 
-helper JAR 重建后，ZIP 时间戳可能改变文件 SHA256。更换内置 JAR 时同步更新 `standalone/module-manage.sh` 的 `THEME_SHA`、`build.ps1` 的资产指纹、`RuntimeProbe.THEME_SHA` 与 `release-manage.ps1` 的兼容指纹，再构建 APP 和打包。协议版本和 helperVersion 必须与实际接口一致。
+- 签名：`build.ps1` 需要 keystore 与口令（`-SigningDir` 下的 `signing.properties`，或用 `-KeystorePath` 与环境变量传入）。缺少签名文件或口令时直接失败，脚本不会生成新证书，也没有内置调试签名可回退，因此换签名无法覆盖已安装的正版。
+- `runtime-helper/build.ps1`（重建 `theme.jar`）只使用本机已安装的 `platforms/android-35/android.jar` 与 `build-tools/35.0.0/lib/d8.jar`，没有版本回退，缺任一项就直接失败；app 主构建脚本有版本回退，不受此限制。发布包已含 `assets/monet/theme.jar`（helper v6，SHA256 `706205ab96a67bfca062bca5152f89fe7cfaddc5ed9db2fe121d1697723dca74`），只有需要重建主题运行件时才跑它。
 
-发布签名库不公开。第三方构建应使用自己的签名，不能同签覆盖官方 APK；不要用卸载官方 APP 的方式假称保留它的草稿。
+## 测试前提
 
-release 源码包同时保留管理器源码与 `runtime-helper/`（native-src、vendor、build.ps1），用于复现 `theme.jar`。单独发布主题模块见 [MONET-README.md](MONET-README.md)。
+离线 runner 在 `tests/`（纪念日、倒计时、课表、小组件快照、调色板、密钥、模块生命周期等），不连接设备，也不写工程。运行前提：
 
-## 签名与密钥
+- PowerShell 7（`pwsh`）；部分 runner 没有 BOM，Windows PowerShell 5.1 会解析失败。
+- `run-tests.ps1`（调色板）调用 `rg --files`，需要已安装 ripgrep。
+- 模块生命周期 `module_lifecycle_test.py` 需要 Python 与 bash（参数 `--bash <bash 路径>`）。
+- 测试用 `org.json`（`json-20240303.jar`）不进 APK：`run-timetable-tests.ps1` 在本地缺失时会从 Maven Central 下载并校验 SHA-256，可用 `-JsonJar` 指定本地 jar；`run-anniversary-tests.ps1` 接受 `-JsonJar`，否则用开发工作目录里缓存的 jar。
 
-- APK 私钥与口令保留在工程之外的私有目录，不进入源码或发布内容。
-- 设备 ADB 私钥由部署流程在设备侧生成与授权，源码与安装包不含预制 keys。
-- 打包前会扫描源码清单，出现 keystore、adbkey 或签名 properties 时停止打包。
-
-## 发布准备
-
-实时提交与目录排序的纯 JVM 检查直接运行当前源码，无需 Android 设备：
-
-```powershell
-pwsh -File .\tests\run-owornate-tests.ps1 -JdkHome <JDK> -BuildRoot <测试输出目录>
-```
-
-本版 6 组测试覆盖串行提交、最新选择合并、失败停止与恢复，以及已安装项稳定沉底；模块生命周期模拟测试本轮 56/56 通过。
-
-- 预发布标签建议 `v1.0.0-rc2`，以 GitHub 预发布形式提供。
-- 独立首次部署、模块生命周期与整机重启恢复已在本轮独立实机环境通过（原表临时隔离生产组件、只重建本包数据、已有 root），见 VALIDATION.md。
-- 发布准备在本地进行，不自动推送远端。
-- 在线目录与下载尚未接入，本版没有在线安装与 OTA。
+本轮只改文档：没有重新构建 APK，也没有运行应用测试。

@@ -1,7 +1,6 @@
 package dev.codex.watchworkshop;
 
 import android.content.Context;
-import java.io.File;
 import org.json.JSONObject;
 
 /** Only fixed, read-only probes. No caller-supplied commands or paths. */
@@ -18,8 +17,7 @@ final class RuntimeProbe {
         +"echo __END__; true";
     private static String section(String s,String a,String b){int i=s.indexOf(a),j=s.indexOf(b,i+a.length());return i<0||j<0?"":s.substring(i+a.length(),j).trim();}
     static JSONObject read(Context context) throws Exception {
-        RsaKeyStore store=new RsaKeyStore(new File(context.getFilesDir(),"adb"));
-        try(AdbClient adb=AdbClient.open(1800,3500,store.privateKey(),store.publicKeyLine())){
+        return RootShell.session(context,1800,3500,adb->{
             String raw=adb.shell(COMMAND,14000);
             if(adb.exitCode()!=0||!raw.contains("__END__"))throw new java.io.IOException("设备检测未完成");
             if(!raw.substring(0,raw.indexOf("__BUILD__")).trim().equals("0"))throw new java.io.IOException("本机通道没有 root 权限");
@@ -31,9 +29,9 @@ final class RuntimeProbe {
             try{JSONObject source=new JSONObject(theme),safe=new JSONObject();for(String k:new String[]{"ready","mode","seed","active","onActive","off","onOff","helperVersion","corners","error"})if(source.has(k))safe.put(k,source.get(k));r.put("theme",safe);}catch(Exception ignored){r.put("theme",JSONObject.NULL);}
             JSONObject guard=new JSONObject();for(String line:section(raw,"__GUARD__","__BLUE__").split("[\\r\\n]+")){int eq=line.indexOf('=');if(eq>0)guard.put(line.substring(0,eq),line.substring(eq+1));}
             r.put("guard",guard);r.put("bluePresent",section(raw,"__BLUE__","__END__").equals("present"));return r;
-        }
+        });
     }
     static boolean hasTheme(JSONObject r){return r!=null&&!r.optString("themeSha").isEmpty();}
     static boolean knownTheme(JSONObject r){return r!=null&&(THEME_SHA.equals(r.optString("themeSha"))||"715a624b78d1ede21e81a2bfb93b44eb254dbdf77db2eefd26741f745f9851cd".equals(r.optString("themeSha")));}
-    static boolean knownHook(JSONObject r){return r!=null&&HOOK_SHA.equals(r.optString("hookSha"));}
+    static boolean knownHook(JSONObject r){return r!=null&&(HOOK_SHA.equals(r.optString("hookSha"))||"0a5654f86c5fa2570d74f9877ff9abe974dcb82ba71c66869b4607f09182c07d".equals(r.optString("hookSha"))||"9b8116a64219e919e0f76777f9bbefb4f42821e651a337d109a21a3a457823f1".equals(r.optString("hookSha")));}
 }

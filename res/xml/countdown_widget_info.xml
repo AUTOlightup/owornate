@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 倒计时组件：181x100dp，不加宿主留白；updatePeriodMillis=0，刷新只由 WidgetClock 排的下一次边界触发。 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="181dp"
+    android:minHeight="100dp"
+    android:initialLayout="@layout/countdown_widget"
+    android:previewImage="@drawable/countdown_widget_preview"
+    android:updatePeriodMillis="0"
+    android:resizeMode="none"
+    android:widgetCategory="home_screen"
+    android:configure="dev.codex.watchworkshop.CountdownSettingsActivity" />
+

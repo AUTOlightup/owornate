@@ -1,5 +1,9 @@
 # 构建中间产物（可随时重建）
 /build/
+/dist/
+/runtime-helper/dist/
+/screenshots/
+/outputs/
 
 # 签名材料绝不入库：私钥只允许放在本机私有目录
 # 工程之外的私有目录
@@ -8,11 +12,17 @@
 *.p12
 *.pk8
 *.pem
+*.der
+adbkey
+adbkey.pub
 signing.properties
 watchworkshop-dev-signing.properties
 local.properties
 /work/
 /logs/
+/AGENTS.md
+/HANDOFF*.md
+/docs/verification-v0.2/
 *.idsig
 
 # IDE / 工具
@@ -25,4 +35,4 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
-# 说明：dist/ 保存可用 APK（交付物），刻意不忽略。
+# APK / ZIP 作为 Release 附件交付，不作为源码提交。

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 倒计时暖色光晕（右上角，最弱一档）。圆角与卡片一致，渐变在卡内结束，不溢出圆角。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="16dp" />
+    <gradient
+        android:angle="45"
+        android:endColor="#24FF9F43"
+        android:startColor="#00FF9F43" />
+</shape>
+

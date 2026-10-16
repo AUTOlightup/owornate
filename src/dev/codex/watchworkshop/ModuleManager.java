@@ -6,19 +6,27 @@ import android.util.AtomicFile;
 import java.io.*;
 import org.json.JSONObject;
 
-/** On-watch lifecycle of the Monet payload shipped in this signed APK. */
+/**
+ * On-watch lifecycle of the Monet payload shipped in this signed APK.
+ *
+ * <p>每个公开操作只开一个本机 ADB 连接：状态脚本、主题读取和写入都在这个连接上依次执行。
+ */
 final class ModuleManager {
     static final class State {
         public final String kind, message;
         public final boolean active;
         public final boolean activeKnown;
+        final ThemeConfig theme;
         State(String kind, boolean active, String message) { this(kind,active,message,true); }
-        State(String kind, boolean active, String message,boolean activeKnown) { this.kind=kind;this.active=active;this.message=message;this.activeKnown=activeKnown; }
+        State(String kind, boolean active, String message,boolean activeKnown) { this(kind,active,message,activeKnown,null); }
+        State(String kind, boolean active, String message,boolean activeKnown,ThemeConfig theme) { this.kind=kind;this.active=active;this.message=message;this.activeKnown=activeKnown;this.theme=theme; }
         boolean installed(){return "installed".equals(kind)||"shared".equals(kind);}
         boolean removable(){return "installed".equals(kind);}
     }
     private static final String SOURCE="/data/user/0/dev.codex.watchworkshop/files/monet";
     private static boolean prepared;
+
+    /** 把 APK 里的组件文件放到私有目录，供 root 脚本读取；每个进程只做一次。 */
     private static synchronized void prepare(Context context)throws IOException {
         if(prepared)return;
         File dir=new File(context.getFilesDir(),"monet");
@@ -34,26 +42,35 @@ final class ModuleManager {
         }
         prepared=true;
     }
-    private static String command(Context context,String action)throws Exception {
-        if(!"status".equals(action)&&!"install".equals(action)&&!"enable".equals(action)&&!"disable".equals(action)&&!"uninstall".equals(action))throw new IllegalArgumentException("module action");
+    private static <T> T session(Context context,RootShell.Body<T> body)throws Exception {
         prepare(context);
-        RsaKeyStore keys=new RsaKeyStore(new File(context.getFilesDir(),"adb"));
-        try(AdbClient adb=AdbClient.open(1800,12000,keys.privateKey(),keys.publicKeyLine())){
-            String output=adb.shell("sh "+SOURCE+"/module-manage.sh "+action,20000).trim();
-            if(adb.exitCode()!=0)throw new IOException(message(output));
-            return output;
-        }
+        return RootShell.session(context,1800,12000,body);
     }
+    private static String command(AdbClient adb,String action)throws Exception {
+        if(!"status".equals(action)&&!"install".equals(action)&&!"enable".equals(action)&&!"disable".equals(action)&&!"uninstall".equals(action))throw new IllegalArgumentException("module action");
+        String output=adb.shell("sh "+SOURCE+"/module-manage.sh "+action,20000).trim();
+        if(adb.exitCode()!=0)throw new IOException(message(output));
+        return output;
+    }
+
     static synchronized State read(Context context)throws Exception {
-        String kind;
-        try{kind=command(context,"status");}
-        catch(java.net.ConnectException|java.net.SocketTimeoutException e){return new State("setup",false,"管理器未连接，请检查首次部署");}
+        try{
+            State state;
+            try{state=session(context,adb->readCurrent(context,adb));}
+            catch(java.net.ConnectException|java.net.SocketTimeoutException e){state=new State("setup",false,"管理器未连接，请检查首次部署");}
+            OWOrnateWidgetStore.recordModule(context,state);
+            return state;
+        }catch(Exception e){OWOrnateWidgetStore.invalidate(context);throw e;}
+    }
+    private static State readCurrent(Context context,AdbClient adb)throws Exception {
+        String kind=command(adb,"status");
         if("installed".equals(kind)||"shared".equals(kind)){
             try{
-                JSONObject state=ThemeRuntime.exchange(context,"read",null).getJSONObject("state");
+                JSONObject state=ThemeRuntime.exchange(adb,"read",null).getJSONObject("state");
                 boolean neutral="original".equals(state.optString("mode"))&&!state.optBoolean("corners");
                 boolean active=!"shared".equals(kind)||!neutral||context.getSharedPreferences("modules",0).getBoolean("monetEnabled",!neutral);
-                return new State(kind,active,active?"已启用":"已停用");
+                ThemeConfig theme=new ThemeConfig(state.getString("mode"),ThemeRuntime.color(state.getString("seed")),state.getBoolean("corners"));
+                return new State(kind,active,active?"已启用":"已停用",true,theme);
             }catch(Exception e){return new State(kind,false,"运行状态未确认，请重新读取或启用",false);}
         }
         if("disabled".equals(kind))return new State("installed",false,"已停用");
@@ -62,40 +79,44 @@ final class ModuleManager {
         return new State("conflict",false,"已有组件版本不兼容");
     }
     static synchronized State install(Context context)throws Exception {
-        State state=read(context);
-        if(!"available".equals(state.kind))throw new IOException("当前状态无法安装，请刷新首页");
-        command(context,"install");
+        session(context,adb->{
+            if(!"available".equals(readCurrent(context,adb).kind))throw new IOException("当前状态无法安装，请刷新首页");
+            return command(adb,"install");
+        });
         return setEnabled(context,true);
     }
     static synchronized State setEnabled(Context context,boolean enabled)throws Exception {
-        State before=read(context);
-        if(!before.installed())throw new IOException("请先安装莫奈取色");
-        if("shared".equals(before.kind)){
-            SharedPreferences prefs=context.getSharedPreferences("modules",0);
-            JSONObject current=ThemeRuntime.exchange(context,"read",null).getJSONObject("state");
-            ThemeConfig config;
-            if(enabled){
-                String saved=prefs.getString("monetBeforeDisable","");
-                if(saved.isEmpty())config=new ThemeConfig("auto",0xffebc16c,true);
-                else{JSONObject old=new JSONObject(saved);config=new ThemeConfig(old.getString("mode"),ThemeRuntime.color(old.getString("seed")),old.getBoolean("corners"));}
-            }else{
-                if(before.active&&!prefs.edit().putString("monetBeforeDisable",new JSONObject().put("mode",current.getString("mode")).put("seed",current.getString("seed")).put("corners",current.getBoolean("corners")).toString()).commit())throw new IOException("停用前设置未保存，请重试");
-                config=new ThemeConfig("original",0xffebc16c,false);
-            }
-            ThemeRuntime.exchange(context,"apply",config);
-            if(!prefs.edit().putBoolean("monetEnabled",enabled).commit())throw new IOException("启停结果已返回，但本地状态保存失败，请重新读取");
-        }else{
-            command(context,enabled?"enable":"disable");
-            if(enabled){
-                Exception last=null;
-                for(int i=0;i<12;i++){
-                    try{ThemeRuntime.exchange(context,"read",null);last=null;break;}
-                    catch(Exception e){last=e;Thread.sleep(1000);}
+        State after=session(context,adb->{
+            State before=readCurrent(context,adb);
+            if(!before.installed())throw new IOException("请先安装莫奈取色");
+            if("shared".equals(before.kind)){
+                SharedPreferences prefs=context.getSharedPreferences("modules",0);
+                JSONObject current=ThemeRuntime.exchange(adb,"read",null).getJSONObject("state");
+                ThemeConfig config;
+                if(enabled){
+                    String saved=prefs.getString("monetBeforeDisable","");
+                    if(saved.isEmpty())config=new ThemeConfig("auto",WorkshopUi.ACCENT,true);
+                    else{JSONObject old=new JSONObject(saved);config=new ThemeConfig(old.getString("mode"),ThemeRuntime.color(old.getString("seed")),old.getBoolean("corners"));}
+                }else{
+                    if(before.active&&!prefs.edit().putString("monetBeforeDisable",new JSONObject().put("mode",current.getString("mode")).put("seed",current.getString("seed")).put("corners",current.getBoolean("corners")).toString()).commit())throw new IOException("停用前设置未保存，请重试");
+                    config=new ThemeConfig("original",WorkshopUi.ACCENT,false);
                 }
-                if(last!=null){command(context,"disable");throw new IOException("组件已安装，启动未确认。请点启用重试",last);}
+                ThemeRuntime.exchange(adb,"apply",config);
+                if(!prefs.edit().putBoolean("monetEnabled",enabled).commit())throw new IOException("启停结果已返回，但本地状态保存失败，请重新读取");
+            }else{
+                command(adb,enabled?"enable":"disable");
+                if(enabled){
+                    Exception last=null;
+                    for(int i=0;i<12;i++){
+                        try{ThemeRuntime.exchange(adb,"read",null);last=null;break;}
+                        catch(Exception e){last=e;Thread.sleep(1000);}
+                    }
+                    if(last!=null){command(adb,"disable");throw new IOException("组件已安装，启动未确认。请点启用重试",last);}
+                }
             }
-        }
-        State after=read(context);
+            return readCurrent(context,adb);
+        });
+        OWOrnateWidgetStore.recordModule(context,after);
         if(!after.activeKnown||after.active!=enabled)throw new IOException("操作结果尚未确认，请刷新后重试");
         return after;
     }
@@ -103,9 +124,12 @@ final class ModuleManager {
         if(!context.getSharedPreferences("modules",0).edit().putBoolean("monetEnabled",true).commit())throw new IOException("主题已生效，但启用状态保存失败，请重新读取");
     }
     static synchronized State uninstall(Context context)throws Exception {
-        if(!read(context).removable())throw new IOException("现有共享组件不能单独卸载，可停用莫奈");
-        command(context,"uninstall");
-        State after=read(context);
+        State after=session(context,adb->{
+            if(!readCurrent(context,adb).removable())throw new IOException("现有共享组件不能单独卸载，可停用莫奈");
+            command(adb,"uninstall");
+            return readCurrent(context,adb);
+        });
+        OWOrnateWidgetStore.recordModule(context,after);
         if(!"available".equals(after.kind))throw new IOException("卸载未确认，请刷新状态");
         return after;
     }

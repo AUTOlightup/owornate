@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="181dp" android:minHeight="100dp" android:initialLayout="@layout/timetable_widget"
+    android:previewImage="@drawable/owornate_widget_preview" android:updatePeriodMillis="0"
+    android:resizeMode="none" android:widgetCategory="home_screen"
+    android:configure="dev.codex.watchworkshop.TimetableSettingsActivity" />

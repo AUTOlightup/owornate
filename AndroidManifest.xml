@@ -2,11 +2,14 @@
 <!--
   OWOrnate - 手表侧原生管理器
   包名 dev.codex.watchworkshop / minSdk 26 / targetSdk 27 / compileSdk 35
-  v1.0.0 (versionCode 7) - 公开发布候选，空白表实测通过前不当作已验收
+  版本号只在这里维护（versionCode / versionName），build.ps1 和 make-release.ps1 都从这里读。
 
   安全边界（本轮刻意保持最小暴露面）：
-  - 只申请 INTERNET 与 RECEIVE_BOOT_COMPLETED，不申请存储、root、无障碍绑定以外的权限。
-  - 只有一个带 LAUNCHER 入口的 Activity。
+  - 只申请 INTERNET、RECEIVE_BOOT_COMPLETED 和 PACKAGE_USAGE_STATS，不申请存储、root、无障碍绑定以外的权限。
+    PACKAGE_USAGE_STATS 只在倒计时切到纪念日模式时经本机 root 授予（appops），切回时撤回；
+    只用来判断快应用引擎是否到过前台，从而决定亮屏时要不要重读纪念日。
+  - 只有一个带 LAUNCHER 入口的 Activity；三个小组件设置页只响应 APPWIDGET_CONFIGURE。
+  - 纪念日模式只读系统快应用“纪念日”的数据文件，用固定命令读取，从不写入。
   - RuntimeBootReceiver 只处理 BOOT_COMPLETED 与 MY_PACKAGE_REPLACED，且只在已有本包
     独立目录时做一次 ensure，不执行任意 shell、不创建缺失目录、不接管生产组件。
   - RuntimeAccessibility 由独立安装流程启用，兼容模式不启用；构建只打包。
@@ -18,8 +21,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="dev.codex.watchworkshop"
-    android:versionCode="7"
-    android:versionName="1.0.0">
+    android:versionCode="15"
+    android:versionName="1.0.1-rc6">
 
     <uses-sdk
         android:minSdkVersion="26"
@@ -27,8 +30,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 系统级权限，普通安装拿不到；纪念日模式下由管理器经 root 用 appops 授予。 -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
 
     <application
+        android:name="dev.codex.watchworkshop.WorkshopApp"
         android:allowBackup="false"
         android:debuggable="false"
         android:icon="@drawable/ic_launcher"
@@ -49,6 +55,53 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="dev.codex.watchworkshop.OWOrnateWidgetSettingsActivity"
+            android:exported="true" android:label="OWOrnate 小组件"
+            android:theme="@style/AppTheme">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <!-- Only the system may dispatch widget lifecycle events; rendering is cache-only. -->
+        <receiver android:name="dev.codex.watchworkshop.OWOrnateWidgetProvider"
+            android:exported="true" android:label="OWOrnate 信息"
+            android:permission="android.permission.BIND_APPWIDGET">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/owornate_widget_info" />
+        </receiver>
+
+        <activity android:name="dev.codex.watchworkshop.CountdownSettingsActivity" android:exported="true" android:label="倒计时设置" android:theme="@style/AppTheme">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
+        <activity android:name="dev.codex.watchworkshop.TimetableSettingsActivity" android:exported="true" android:label="课表" android:theme="@style/AppTheme">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
+        <!-- 纪念日模式下点倒计时卡片：打开纪念日后立刻结束，不显示界面；只由本应用的卡片点击启动。 -->
+        <activity android:name="dev.codex.watchworkshop.AnniversaryLaunchActivity"
+            android:exported="false" android:excludeFromRecents="true" android:noHistory="true"
+            android:taskAffinity="" android:theme="@android:style/Theme.NoDisplay" />
+        <receiver android:name="dev.codex.watchworkshop.CountdownWidgetProvider" android:exported="true" android:label="倒计时" android:permission="android.permission.BIND_APPWIDGET">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/countdown_widget_info" />
+        </receiver>
+        <receiver android:name="dev.codex.watchworkshop.TimetableWidgetProvider" android:exported="true" android:label="课表" android:permission="android.permission.BIND_APPWIDGET">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/timetable_widget_info" />
+        </receiver>
+        <receiver android:name="dev.codex.watchworkshop.WidgetClock" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!--
           受控启动检查：只处理开机完成与本次安装/更新完成两个合法广播。
