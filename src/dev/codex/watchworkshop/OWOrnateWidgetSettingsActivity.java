@@ -1,11 +1,11 @@
 package dev.codex.watchworkshop;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * OWOrnate 信息小组件设置页。所有信息卡片共用一份显示设置；三个显示项点了就生效，页首预览同步变化。
@@ -15,8 +15,21 @@ import java.util.concurrent.Executors;
  */
 public final class OWOrnateWidgetSettingsActivity extends WatchActivity {
 
-    /** “读取最新状态”专用单线程；后台线程只调 ModuleManager，不访问任何 view。 */
-    private static final ExecutorService io = Executors.newSingleThreadExecutor();
+    /** 与莫奈读写共用队列；后台线程只调 ModuleManager，不访问任何 view。 */
+    private static final ExecutorService io = MonetPages.IO;
+    private final SharedPreferences.OnSharedPreferenceChangeListener runtimeChanged = (store, key) -> {
+        if (!destroyed()) render();
+    };
+
+    @Override protected void onStart() {
+        super.onStart();
+        RuntimeStateStore.preferences(this).registerOnSharedPreferenceChangeListener(runtimeChanged);
+    }
+
+    @Override protected void onStop() {
+        RuntimeStateStore.preferences(this).unregisterOnSharedPreferenceChangeListener(runtimeChanged);
+        super.onStop();
+    }
 
     private boolean reading, readFailed;
     private int card = NO_CARD;
@@ -93,7 +106,7 @@ public final class OWOrnateWidgetSettingsActivity extends WatchActivity {
             String report;
             boolean confirmed;
             try {
-                ModuleManager.State state = ModuleManager.read(getApplicationContext());
+                ModuleState state = ModuleManager.read(getApplicationContext());
                 if (state.installed() && state.activeKnown) {
                     report = "已确认：莫奈" + (state.active ? "已启用。" : "已停用。");
                     confirmed = true;
@@ -135,7 +148,7 @@ public final class OWOrnateWidgetSettingsActivity extends WatchActivity {
                 () -> apply(showStatus, !showTheme, showVersion));
         ui.toggle("显示版本", "卡片显示 OWOrnate 版本", showVersion,
                 () -> apply(showStatus, showTheme, !showVersion));
-        ui.note("切换后立即生效。状态和主题来自上次读取，不会自动刷新。");
+        ui.note("切换后立即生效。状态和主题与管理器共用上次确认结果；不会自动轮询手表。");
         ui.button(reading ? "正在读取…" : "读取最新状态", false, !reading, this::readLatest);
         if (!readNote.isEmpty()) ui.note(readNote, readFailed ? "danger" : "");
     }

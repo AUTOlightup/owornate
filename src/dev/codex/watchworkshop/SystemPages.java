@@ -20,7 +20,9 @@ final class SystemPages {
     private final MainActivity a;
     private JSONObject snapshot;
     private boolean probing;
+    private boolean repairing;
     private String probeError = "";
+    boolean busy() { return repairing; }
 
     SystemPages(MainActivity activity) {
         a = activity;
@@ -97,14 +99,14 @@ final class SystemPages {
     /** 设置：运行环境和说明类入口在上，版本信息在下。 */
     private void settings() {
         WorkshopUi ui = a.ui;
-        ui.row("运行环境", "授权、组件和小组件接入状态", "shield", () -> a.go("check"));
+        ui.row("运行环境", "授权、组件和模块接入状态", "shield", () -> a.go("check"));
         ui.row("首次设置", "安装与恢复说明", "book", () -> a.go("guide"));
         ui.row("技术详情", "授权与组件信息", "info", () -> a.go("technical"));
         ui.row("开源许可", "Material Color Utilities 与 Frida", "file", () -> a.go("licenses"));
         ui.title("关于 OWOrnate");
         ui.value("版本", appVersion(a));
         ui.value("包名", a.getPackageName());
-        ui.note("管理控制中心配色、连续圆角，以及负一屏信息、倒计时和课表小组件。内置功能可离线配置；首次部署需电脑和现有 root adbd。");
+        ui.note("管理控制中心配色、连续圆角、截屏与录屏，以及负一屏信息、倒计时和课表小组件。内置功能可离线配置；首次部署需电脑和现有 root adbd。");
     }
 
     private void probe() {
@@ -136,29 +138,51 @@ final class SystemPages {
         a.refresh(true);
     }
 
+    /** Explicit user action; opening the manager or checking status never calls ensure. */
+    private void repairRuntime() {
+        if (repairing || a.working()) return;
+        repairing = true;
+        a.render();
+        MonetPages.IO.execute(() -> {
+            RuntimeSupport.ensure(a.getApplicationContext(), false);
+            a.runOnUiThread(() -> {
+                repairing = false;
+                if (!a.destroyed()) recheck();
+            });
+        });
+    }
+
     private void check() {
         WorkshopUi ui = a.ui;
         MonetPages monet = a.monet;
-        boolean reading = probing || monet.refreshing();
+        boolean reading = probing || monet.refreshing() || a.widgets.refreshing() || a.capture.refreshing();
         if (reading) {
             ui.hero("scan", "正在检查", "读取设备、授权和模块状态。", "");
-        } else if (!probeError.isEmpty() || monet.failed()) {
-            ui.hero("key", "暂时无法管理", "本机连接或授权需要检查。", "warning");
-            ui.note(probeError.isEmpty() ? monet.error() : probeError);
+        } else if (!probeError.isEmpty() || monet.failed() || a.widgets.failed() || a.capture.failed()) {
+            ui.hero("key", "状态读取未完成", "检查本机连接或授权后重新读取。", "warning");
+            if (!probeError.isEmpty()) ui.note(probeError);
+            if (monet.failed()) ui.note(monet.error());
+            if (a.widgets.failed()) ui.note("小组件：" + a.widgets.error());
+            if (a.capture.failed()) ui.note("截屏与录屏：" + a.capture.error());
             ui.row("首次设置", "查看部署步骤", "book", () -> a.go("guide"));
         } else if (monet.known()) {
             String kind = monet.statusText();
-            boolean ready = monet.installed() || monet.available();
+            boolean ready = monet.confirmedAt() > 0 && (monet.installed() || monet.available());
             ui.hero(ready ? "shield" : "key", ready ? "管理器已就绪" : "需要检查环境", kind, ready ? "success" : "warning");
-            if (snapshot != null) ui.value("检查时间", time(snapshot.optLong("checkedAt")));
+            ui.value("莫奈确认时间", time(monet.confirmedAt()));
             if (ready) ui.button("进入 OWOrnate", true, a::returnHome);
-            else ui.row("首次设置", "查看部署步骤", "book", () -> a.go("guide"));
+            else if (monet.needsSetup()) ui.row("首次设置", "查看部署步骤", "book", () -> a.go("guide"));
         } else {
             ui.note("尚未执行检查。");
         }
         if (!reading) {
             device();
-            ui.button("重新检查", false, this::recheck);
+            ui.button("重新检查", false, !repairing && !a.working(), this::recheck);
+            if (monet.independent()) {
+                ui.button(repairing ? "正在恢复启动…" : "恢复独立组件启动", false,
+                        !repairing && !a.working(), this::repairRuntime);
+                ui.note(RuntimeSupport.lastResult(a));
+            }
         }
     }
 
@@ -174,6 +198,7 @@ final class SystemPages {
         ui.value("可用空间", (stat.getAvailableBytes() / 1024 / 1024) + " MB");
         ui.value("适配范围", "OPPO Watch 2 46mm / A.92");
         ui.value("负一屏小组件", a.widgets.statusText());
+        ui.value("截屏与录屏", a.capture.statusText());
     }
 
     private void guide() {
@@ -192,9 +217,11 @@ final class SystemPages {
         WorkshopUi ui = a.ui;
         ui.value("App", a.getPackageName() + " / " + appVersion(a));
         ui.value("本机通道", AdbClient.HOST + ":" + AdbClient.PORT + " · root adbd");
+        ui.value("截屏与录屏", a.capture.statusText());
+        if (a.capture.failed()) ui.note("截屏与录屏：" + a.capture.error(), "warning");
         if (snapshot != null) {
             ui.value("组件指纹", snapshot.optString("themeSha", "未读取"));
-            ui.value("检查时间", time(snapshot.optLong("checkedAt")));
+            ui.value("设备检查时间", time(snapshot.optLong("checkedAt")));
         }
         ui.button("导出当前配置", false, a.monet.exportable(), a.monet::exportDraft);
         ui.value("启动记录", RuntimeSupport.lastResult(a));

@@ -88,9 +88,11 @@ param(
 $ErrorActionPreference = 'Stop'
 # Ship the same fixed widget-host payload used by the desktop fallback.
 New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'assets/widget-host') | Out-Null
-foreach($name in @('widget-manage.sh','WatchHide-Launcher-Hook-v11.js')) {
+foreach($name in @('widget-manage.sh','WatchHide-Launcher-Hook-v12.js')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "widget-host/$name") -Destination (Join-Path $PSScriptRoot "assets/widget-host/$name")
 }
+New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'assets/capture') | Out-Null
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'capture/capture.sh') -Destination (Join-Path $PSScriptRoot 'assets/capture/capture.sh')
 
 Set-StrictMode -Version Latest
 

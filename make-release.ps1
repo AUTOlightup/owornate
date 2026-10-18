@@ -18,7 +18,7 @@ $bundle=Join-Path $releaseFull "OWOrnate-v$version-Windows"
 $source=Join-Path $releaseFull 'owornate-source'
 $monet=Join-Path $releaseFull 'watch2-monet-source'
 New-Item -ItemType Directory -Force -Path "$bundle/payload","$bundle/tools/adb","$bundle/scripts","$bundle/licenses",$source,$monet | Out-Null
-$payload=[ordered]@{}; $payload[$apkName]="dist/$apkName"; $payload['WatchHide-Launcher-Hook-v11.js']='widget-host/WatchHide-Launcher-Hook-v11.js'
+$payload=[ordered]@{}; $payload[$apkName]="dist/$apkName"; $payload['WatchHide-Launcher-Hook-v12.js']='widget-host/WatchHide-Launcher-Hook-v12.js'
 foreach($name in $payload.Keys){Copy-Item -LiteralPath (Join-Path $project $payload[$name]) -Destination (Join-Path $bundle "payload/$name")}
 Copy-Item -LiteralPath $FridaInject -Destination "$bundle/payload/frida-inject"
 foreach($name in @('adb.exe','AdbWinApi.dll','AdbWinUsbApi.dll','libwinpthread-1.dll','NOTICE.txt','source.properties')){Copy-Item -LiteralPath (Join-Path $AdbDirectory $name) -Destination "$bundle/tools/adb/$name"}
@@ -35,7 +35,11 @@ foreach($name in $entry.Keys){
 }
 # Source allowlist excludes raw probes, root screenshots, build output and signing data.
 # Release-document screenshots remain with the historical validation records that cite them.
-foreach($dir in @('src','res','assets','tests','standalone','widget-host')){Copy-Item -LiteralPath (Join-Path $project $dir) -Destination $source -Recurse}
+foreach($dir in @('src','res','assets','tests','standalone','widget-host','capture')){
+    Get-ChildItem -LiteralPath (Join-Path $project $dir) -File -Recurse -Force |
+        Where-Object {$_.Extension -notin @('.pyc','.pyo') -and $_.FullName -notmatch '[\\/]__pycache__[\\/]'} |
+        ForEach-Object {$target=Join-Path $source $_.FullName.Substring($project.Length+1);New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target)|Out-Null;Copy-Item -LiteralPath $_.FullName -Destination $target}
+}
 foreach($name in @('AndroidManifest.xml','build.ps1','release-manage.ps1','deploy-theme-helper.ps1','setup-readonly.ps1','make-release.ps1','LICENSE','.gitignore','.gitattributes')){Copy-Item -LiteralPath (Join-Path $project $name) -Destination $source}
 Copy-Item -LiteralPath $docRoot -Destination "$source/docs" -Recurse
 Copy-Item -LiteralPath "$docRoot/README-public.md" -Destination "$source/README.md"
@@ -50,6 +54,7 @@ Copy-Item -LiteralPath "$project/LICENSE" -Destination "$monet/LICENSE"
 Copy-Item -LiteralPath "$docRoot/MONET-README.md" -Destination "$monet/README.md"
 Copy-Item -LiteralPath "$project/docs/莫奈协议-v1.md" -Destination "$monet/PROTOCOL.md"
 Copy-Item -LiteralPath "$project/docs/莫奈协议-v1.md" -Destination "$source/docs/莫奈协议-v1.md"
+foreach($basePath in @($bundle,$source)){Copy-Item -LiteralPath "$project/docs/截屏录屏-原生版.md" -Destination "$basePath/docs/截屏录屏-原生版.md"}
 foreach($basePath in @($bundle,$source)){
     $duplicateReadme=Join-Path $basePath 'docs/README-public.md'
     $readmeText=[IO.File]::ReadAllText($duplicateReadme,[Text.Encoding]::UTF8).Replace('(docs/','(').Replace('src="docs/','src="')

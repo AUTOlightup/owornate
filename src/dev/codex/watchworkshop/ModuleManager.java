@@ -12,17 +12,6 @@ import org.json.JSONObject;
  * <p>每个公开操作只开一个本机 ADB 连接：状态脚本、主题读取和写入都在这个连接上依次执行。
  */
 final class ModuleManager {
-    static final class State {
-        public final String kind, message;
-        public final boolean active;
-        public final boolean activeKnown;
-        final ThemeConfig theme;
-        State(String kind, boolean active, String message) { this(kind,active,message,true); }
-        State(String kind, boolean active, String message,boolean activeKnown) { this(kind,active,message,activeKnown,null); }
-        State(String kind, boolean active, String message,boolean activeKnown,ThemeConfig theme) { this.kind=kind;this.active=active;this.message=message;this.activeKnown=activeKnown;this.theme=theme; }
-        boolean installed(){return "installed".equals(kind)||"shared".equals(kind);}
-        boolean removable(){return "installed".equals(kind);}
-    }
     private static final String SOURCE="/data/user/0/dev.codex.watchworkshop/files/monet";
     private static boolean prepared;
 
@@ -53,16 +42,20 @@ final class ModuleManager {
         return output;
     }
 
-    static synchronized State read(Context context)throws Exception {
+    static synchronized ModuleState read(Context context)throws Exception {
+        ModuleState state;
         try{
-            State state;
-            try{state=session(context,adb->readCurrent(context,adb));}
-            catch(java.net.ConnectException|java.net.SocketTimeoutException e){state=new State("setup",false,"管理器未连接，请检查首次部署");}
-            OWOrnateWidgetStore.recordModule(context,state);
-            return state;
-        }catch(Exception e){OWOrnateWidgetStore.invalidate(context);throw e;}
+            state=session(context,adb->readCurrent(context,adb));
+        }catch(Exception e){RuntimeStateStore.failMonet(context,e);throw e;}
+        if(state.installed()&&!state.activeKnown){
+            IOException error=new IOException(state.message);
+            RuntimeStateStore.failMonet(context,error,state);
+            throw error;
+        }
+        RuntimeStateStore.recordMonet(context,state);
+        return state;
     }
-    private static State readCurrent(Context context,AdbClient adb)throws Exception {
+    private static ModuleState readCurrent(Context context,AdbClient adb)throws Exception {
         String kind=command(adb,"status");
         if("installed".equals(kind)||"shared".equals(kind)){
             try{
@@ -70,24 +63,28 @@ final class ModuleManager {
                 boolean neutral="original".equals(state.optString("mode"))&&!state.optBoolean("corners");
                 boolean active=!"shared".equals(kind)||!neutral||context.getSharedPreferences("modules",0).getBoolean("monetEnabled",!neutral);
                 ThemeConfig theme=new ThemeConfig(state.getString("mode"),ThemeRuntime.color(state.getString("seed")),state.getBoolean("corners"));
-                return new State(kind,active,active?"已启用":"已停用",true,theme);
-            }catch(Exception e){return new State(kind,false,"运行状态未确认，请重新读取或启用",false);}
+                return new ModuleState(kind,active,active?"已启用":"已停用",true,theme);
+            }catch(Exception e){return new ModuleState(kind,false,"组件已安装，运行状态读取失败，请重试",false);}
         }
-        if("disabled".equals(kind))return new State("installed",false,"已停用");
-        if("available".equals(kind))return new State(kind,false,"未安装 · 可直接在手表安装");
-        if("setup".equals(kind))return new State(kind,false,"首次使用需要部署管理器");
-        return new State("conflict",false,"已有组件版本不兼容");
+        if("disabled".equals(kind))return new ModuleState("installed",false,"已停用");
+        if("available".equals(kind))return new ModuleState(kind,false,"未安装 · 可直接在手表安装");
+        if("setup".equals(kind))return new ModuleState(kind,false,"首次使用需要部署管理器");
+        if("conflict".equals(kind))return new ModuleState(kind,false,"已有组件版本不兼容");
+        throw new IOException("未收到有效的莫奈状态，请重新读取");
     }
-    static synchronized State install(Context context)throws Exception {
+    static synchronized ModuleState install(Context context)throws Exception {
+        try{
         session(context,adb->{
             if(!"available".equals(readCurrent(context,adb).kind))throw new IOException("当前状态无法安装，请刷新首页");
             return command(adb,"install");
         });
         return setEnabled(context,true);
+        }catch(Exception e){RuntimeStateStore.failMonet(context,e);throw e;}
     }
-    static synchronized State setEnabled(Context context,boolean enabled)throws Exception {
-        State after=session(context,adb->{
-            State before=readCurrent(context,adb);
+    static synchronized ModuleState setEnabled(Context context,boolean enabled)throws Exception {
+        try{
+        ModuleState after=session(context,adb->{
+            ModuleState before=readCurrent(context,adb);
             if(!before.installed())throw new IOException("请先安装莫奈取色");
             if("shared".equals(before.kind)){
                 SharedPreferences prefs=context.getSharedPreferences("modules",0);
@@ -116,22 +113,25 @@ final class ModuleManager {
             }
             return readCurrent(context,adb);
         });
-        OWOrnateWidgetStore.recordModule(context,after);
         if(!after.activeKnown||after.active!=enabled)throw new IOException("操作结果尚未确认，请刷新后重试");
+        RuntimeStateStore.recordMonet(context,after);
         return after;
+        }catch(Exception e){RuntimeStateStore.failMonet(context,e);throw e;}
     }
     static void rememberThemeEnabled(Context context)throws IOException {
         if(!context.getSharedPreferences("modules",0).edit().putBoolean("monetEnabled",true).commit())throw new IOException("主题已生效，但启用状态保存失败，请重新读取");
     }
-    static synchronized State uninstall(Context context)throws Exception {
-        State after=session(context,adb->{
+    static synchronized ModuleState uninstall(Context context)throws Exception {
+        try{
+        ModuleState after=session(context,adb->{
             if(!readCurrent(context,adb).removable())throw new IOException("现有共享组件不能单独卸载，可停用莫奈");
             command(adb,"uninstall");
             return readCurrent(context,adb);
         });
-        OWOrnateWidgetStore.recordModule(context,after);
         if(!"available".equals(after.kind))throw new IOException("卸载未确认，请刷新状态");
+        RuntimeStateStore.recordMonet(context,after);
         return after;
+        }catch(Exception e){RuntimeStateStore.failMonet(context,e);throw e;}
     }
     private static String message(String code){
         if(code.contains("SETUP_REQUIRED")||code.contains("ROOT_REQUIRED"))return "首次部署未完成，请用电脑部署管理器一次";

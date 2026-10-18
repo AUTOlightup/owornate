@@ -14,7 +14,7 @@ $App='dev.codex.watchworkshop'
 $Component="$App/$App.RuntimeAccessibility"
 $Launcher='com.heytap.wearable.launcher'
 $Mailbox="/data/user_de/0/$Launcher/files/watchworkshop-theme"
-$HookShas=@('6e46e44d3b4f5fc2162b60dd90b5de2b3c2e4f4cfcf50d87eee5c5071883f722','0a5654f86c5fa2570d74f9877ff9abe974dcb82ba71c66869b4607f09182c07d','9b8116a64219e919e0f76777f9bbefb4f42821e651a337d109a21a3a457823f1')
+$HookShas=@('6e46e44d3b4f5fc2162b60dd90b5de2b3c2e4f4cfcf50d87eee5c5071883f722','0a5654f86c5fa2570d74f9877ff9abe974dcb82ba71c66869b4607f09182c07d','9b8116a64219e919e0f76777f9bbefb4f42821e651a337d109a21a3a457823f1','4bc93055211b1c070155b45808955b6e41380c51edc63010ba8f0f759c508ac0')
 $ThemeSha='706205ab96a67bfca062bca5152f89fe7cfaddc5ed9db2fe121d1697723dca74'
 if(!$Adb){$Adb=Join-Path $BundleRoot 'tools/adb/adb.exe';if(!(Test-Path -LiteralPath $Adb)){$found=Get-Command adb -ErrorAction SilentlyContinue;if($found){$Adb=$found.Source}}}
 if(!(Test-Path -LiteralPath $Adb -PathType Leaf)){throw '找不到 adb。安装包请完整解压；源码运行请传 -Adb。'}
@@ -76,34 +76,34 @@ Check-Compatible
 $integrated=(Shell 'test -f /data/local/tmp/watchhide/hook.js && echo yes || true') -eq 'yes'
 if($Action -eq 'EnableWidgets'){
     Check-Payload
-    if(!$integrated){throw '本版小组件接入需要已有共享 Hook v9/v10/v11；独立莫奈环境暂不支持。'}
+    if(!$integrated){throw '本版小组件接入需要已有共享 Hook v9/v10/v11/v12；独立莫奈环境暂不支持。'}
     $hook='/data/local/tmp/watchhide/hook.js'
-    $v9=$HookShas[0];$v10=$HookShas[1];$v11=$HookShas[2]
+    $v9=$HookShas[0];$v10=$HookShas[1];$v12=$HookShas[3]
     $current=Hash-Device $hook
     if($current -notin $HookShas -or (Hash-Device '/data/local/tmp/watchface-theme/theme.jar') -ne $ThemeSha){throw '共享组件版本不受支持，未作修改。'}
     if((Shell "pm path $App") -notmatch '^package:'){throw '请先运行 00-Setup.cmd 安装管理器。'}
     # Query the existing supervisor using its own read-only status action.
     $status=Shell 'sh /data/local/tmp/watchhide/watchhide-bootstrap.sh status'
     if($status -notmatch '(?m)^supervisor_pid=(\d+)\s*$'){throw '既有 Launcher 守护程序未运行，请恢复原组件后重试。'}
-    $candidate=Join-Path $BundleRoot 'payload/WatchHide-Launcher-Hook-v11.js'
-    if((Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant() -ne $v11){throw '小组件接入文件指纹不符'}
-    # Upgrade the shared hook to v11 when an older shared hook (v9/v10) is live.
-    if($current -ne $v11){
-        $backup='/data/local/tmp/watchhide/hook-before-v11.js'
+    $candidate=Join-Path $BundleRoot 'payload/WatchHide-Launcher-Hook-v12.js'
+    if((Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant() -ne $v12){throw '小组件接入文件指纹不符'}
+    # Upgrade the shared hook to v12 when an older shared hook (v9/v10) is live.
+    if($current -ne $v12){
+        $backup='/data/local/tmp/watchhide/hook-before-v12.js'
         [void](Shell "if [ ! -e $backup ]; then cp -p $hook $backup; fi")
         [void](Run-Adb @('push',$candidate,"$hook.widgets-new"))
-        if((Hash-Device "$hook.widgets-new") -ne $v11){throw '小组件接入文件推送不完整'}
+        if((Hash-Device "$hook.widgets-new") -ne $v12){throw '小组件接入文件推送不完整'}
         [void](Shell "chmod 644 $hook.widgets-new && chown 0:0 $hook.widgets-new && mv $hook.widgets-new $hook")
     }
     Restart-Launcher
     $null=Wait-Theme
-    Write-Host '小组件接入文件已更新到 v11 并重载 Launcher。可在负一屏原生编辑页添加/移除卡片；在管理器里可开关隐藏小布助手。'
+    Write-Host '小组件接入文件已更新到 v12 并重载 Launcher。可在负一屏原生编辑页添加/移除卡片；在管理器里可开关隐藏小布助手。'
     exit
 }
 if($Action -eq 'Setup'){
     Check-Payload
     if($integrated){
-        if((Hash-Device '/data/local/tmp/watchhide/hook.js') -notin $HookShas -or (Hash-Device '/data/local/tmp/watchface-theme/theme.jar') -ne $ThemeSha){throw '现有综合组件版本不同，不能接管。需要 Launcher Hook v9/v10/v11 + helper v6。'}
+        if((Hash-Device '/data/local/tmp/watchhide/hook.js') -notin $HookShas -or (Hash-Device '/data/local/tmp/watchface-theme/theme.jar') -ne $ThemeSha){throw '现有综合组件版本不同，不能接管。需要 Launcher Hook v9/v10/v11/v12 + helper v6。'}
     }else{
         if((Shell 'test -f /data/local/tmp/watch-monet/hook.js && echo legacy || true') -eq 'legacy'){throw '存在旧独立分享版，请先按旧包说明卸载运行组件。'}
         $known=Shell "cat $Base/install-state.json 2>/dev/null || true"

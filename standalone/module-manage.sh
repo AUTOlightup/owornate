@@ -7,13 +7,15 @@ SHARED=/data/local/tmp/watchhide/hook.js
 LEGACY=/data/local/tmp/watch-monet/hook.js
 THEME_SHA=706205ab96a67bfca062bca5152f89fe7cfaddc5ed9db2fe121d1697723dca74
 HOOK_SHA=473ab51ed1888c278a414877eaafe04b59c6aa6d02a670548a50982ecac6aa35
-# Shared runtime hook baselines: the computer path may leave Launcher Hook v9 or v10.
+# Shared runtime hook baselines: the computer path may leave Launcher Hook v9, v10, v11 or v12.
 SHARED_SHA=6e46e44d3b4f5fc2162b60dd90b5de2b3c2e4f4cfcf50d87eee5c5071883f722
 SHARED_SHA_V10=0a5654f86c5fa2570d74f9877ff9abe974dcb82ba71c66869b4607f09182c07d
+SHARED_SHA_V11=9b8116a64219e919e0f76777f9bbefb4f42821e651a337d109a21a3a457823f1
+SHARED_SHA_V12=4bc93055211b1c070155b45808955b6e41380c51edc63010ba8f0f759c508ac0
 FRIDA_SHA=e865f8746cee97761af50a31528315baf14cc047eedd35242f30a744b91d25ea
 fail() { echo "$1"; exit 1; }
 file_sha() { sha256sum "$1" 2>/dev/null | cut -d ' ' -f 1; }
-shared_ok() { case "$(file_sha "$1")" in "$SHARED_SHA"|"$SHARED_SHA_V10") return 0;; esac; return 1; }
+shared_ok() { case "$(file_sha "$1")" in "$SHARED_SHA"|"$SHARED_SHA_V10"|"$SHARED_SHA_V11"|"$SHARED_SHA_V12") return 0;; esac; return 1; }
 own() { [ -f "$BASE/installed" ] && [ "$(file_sha "$BASE/theme.jar")" = "$THEME_SHA" ] && [ "$(file_sha "$BASE/hook.js")" = "$HOOK_SHA" ]; }
 base_ready() { [ -f "$BASE/manager-ready" ] && [ "$(file_sha "$BASE/frida-inject")" = "$FRIDA_SHA" ]; }
 compatible() {

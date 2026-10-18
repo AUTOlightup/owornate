@@ -2,3 +2,4 @@
 /assets/** -text
 /widget-host/** -text
 /standalone/** -text
+/capture/** -text

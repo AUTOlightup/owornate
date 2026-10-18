@@ -2,10 +2,9 @@ package dev.codex.watchworkshop;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.util.Log;
 import java.io.IOException;
 
-/** 信息卡片的显示设置（全局一份）和最近一次确认过的莫奈运行状态。 */
+/** 信息卡片只拥有显示设置；运行状态由统一存储投影，不再单独复制。 */
 final class OWOrnateWidgetStore {
     private static SharedPreferences prefs(Context context){return context.getSharedPreferences("owornate_widget",0);}
     static final class Options {
@@ -38,32 +37,12 @@ final class OWOrnateWidgetStore {
         migrate(context);
         if(!prefs(context).edit().putBoolean(SLOT+"status",options.showStatus).putBoolean(SLOT+"theme",options.showTheme).putBoolean(SLOT+"version",options.showVersion).commit())throw new IOException("组件设置未保存，请重试");
     }
-    static synchronized OWOrnateWidgetSnapshot snapshot(Context context){
-        SharedPreferences p=prefs(context);ThemeConfig theme=null;
-        try{if(p.contains("mode"))theme=new ThemeConfig(p.getString("mode",""),p.getInt("seed",WorkshopUi.ACCENT),p.getBoolean("corners",false));}catch(IllegalArgumentException ignored){}
-        return new OWOrnateWidgetSnapshot(p.getString("kind","unknown"),p.getBoolean("known",false),p.getBoolean("active",false),theme,p.getLong("confirmedAt",0));
-    }
-    static synchronized void recordModule(Context context,ModuleManager.State state){
-        if(state==null){invalidate(context);return;}
-        // A connection/setup failure is not evidence that a previously installed module vanished.
-        boolean known=state.activeKnown&&!"setup".equals(state.kind)&&!"conflict".equals(state.kind);
-        write(context,new OWOrnateWidgetSnapshot(state.kind,known,state.active,state.theme,System.currentTimeMillis()));
-    }
-    static synchronized void recordAppliedTheme(Context context,ThemeConfig theme){
-        OWOrnateWidgetSnapshot old=snapshot(context);
-        // Called only after a matching apply/rollback ACK and persisted enabled intent.
-        if(old.installed())write(context,new OWOrnateWidgetSnapshot(old.kind,true,true,theme,System.currentTimeMillis()));
-    }
-    static synchronized void invalidate(Context context){
-        OWOrnateWidgetSnapshot old=snapshot(context);
-        write(context,new OWOrnateWidgetSnapshot(old.kind,false,false,null,0));
-    }
-    private static void write(Context context,OWOrnateWidgetSnapshot value){
-        SharedPreferences.Editor e=prefs(context).edit().putString("kind",value.kind).putBoolean("known",value.activeKnown).putBoolean("active",value.active).putLong("confirmedAt",value.confirmedAt);
-        if(value.theme==null)e.remove("mode").remove("seed").remove("corners");
-        else e.putString("mode",value.theme.mode).putInt("seed",value.theme.seed).putBoolean("corners",value.theme.corners);
-        // Widget bookkeeping must not convert a successful module operation into a failure.
-        if(!e.commit())Log.w("OWOrnateWidget","Unable to persist widget observation");
-        OWOrnateWidgetProvider.updateAll(context);
+    static OWOrnateWidgetSnapshot snapshot(Context context){
+        StatusObservation<ModuleState> observation=RuntimeStateStore.monet(context);
+        ModuleState state=observation.value;
+        return new OWOrnateWidgetSnapshot(state==null?null:state.kind,
+                state!=null&&state.activeKnown&&observation.confirmedAt>0,
+                state!=null&&state.active, state==null?null:state.theme,
+                observation.confirmedAt, observation.error);
     }
 }

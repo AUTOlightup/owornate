@@ -39,8 +39,8 @@ final class MonetPages {
     private final MainActivity a;
     private final SharedPreferences prefs;
     private LatestThemeQueue<ThemeConfig> writes;
-    private ModuleManager.State state;
-    private long readAt;
+    private ModuleState state;
+    private StatusObservation<ModuleState> observation;
     private boolean refreshing, opBusy, themeBusy, saveBusy, connected, canRollback;
     private String error = "", operation = "", themeMessage = "", exportPath = "";
     private Integer autoSeed;
@@ -57,11 +57,7 @@ final class MonetPages {
         } catch (Exception bad) {
             draft = new ThemeConfig("auto", WorkshopUi.ACCENT, true);
         }
-        // 上次确认过的状态：首页一打开就能显示，后台读完再更新。
-        if (prefs.contains("monetKind")) {
-            state = new ModuleManager.State(prefs.getString("monetKind", ""), prefs.getBoolean("monetActive", false),
-                    prefs.getString("monetMessage", ""), prefs.getBoolean("monetKnown", false));
-        }
+        sync();
         resultAction = prefs.getString("resultAction", "");
         resultOk = prefs.getBoolean("resultOk", false);
         resultError = prefs.getString("resultError", "");
@@ -70,7 +66,7 @@ final class MonetPages {
                 markPending();
                 JSONObject ack = ThemeRuntime.exchange(a, "apply", target);
                 ModuleManager.rememberThemeEnabled(a);
-                persistConfirmed(ack, true);
+                persistConfirmed(ack);
                 a.runOnUiThread(() -> {
                     if (a.destroyed()) return;
                     acceptTheme(ack, draft == target);
@@ -95,27 +91,42 @@ final class MonetPages {
 
     boolean known() { return state != null; }
     boolean installed() { return state != null && state.installed(); }
-    boolean available() { return state != null && "available".equals(state.kind); }
+    boolean available() { return state != null && "available".equals(state.kind) && !failed() && observation.confirmedAt > 0; }
+    boolean incompatible() { return state != null && "conflict".equals(state.kind); }
+    boolean needsSetup() { return state != null && "setup".equals(state.kind); }
     boolean refreshing() { return refreshing; }
-    boolean failed() { return state == null && !error.isEmpty(); }
+    boolean failed() { return !error.isEmpty(); }
     String error() { return error; }
     boolean hasResult() { return !resultAction.isEmpty(); }
     boolean working() { return themeBusy || saveBusy || opBusy || refreshing || writes.isRunning(); }
-    boolean reachable() { return state != null && state.installed() && state.activeKnown && state.active; }
+    boolean reachable() { return state != null && state.installed() && state.activeKnown && state.active && !failed() && observation.confirmedAt > 0; }
+    long confirmedAt() { return observation.confirmedAt; }
+    boolean independent() { return state != null && state.removable(); }
+
+    /** Called on resume and when any reader publishes a new observation. */
+    void sync() {
+        observation = RuntimeStateStore.monet(a);
+        state = observation.value;
+        error = observation.error;
+        if (!reachable()) connected = false;
+    }
 
     String statusText() {
         if (refreshing && state == null) return "正在读取状态…";
         if (state == null) return error.isEmpty() ? "运行状态待检查" : "状态读取失败";
+        if (failed()) return "上次：" + state.message + " · 本次读取失败";
+        if (observation.confirmedAt == 0 || refreshing) return "上次：" + state.message;
         return state.message;
     }
 
     String discoverLine() {
         if (installed()) return "已安装 · " + statusText();
-        return state == null ? "内置 · 状态待确认" : "内置 · 离线安装";
+        if (available()) return "内置 · 可离线安装";
+        return statusText();
     }
 
     void homeRow() {
-        a.ui.row("莫奈取色", statusText(), "palette", () -> a.go("theme"));
+        a.ui.row("莫奈取色", statusText(), "palette", () -> a.go(installed() ? "theme" : "detail"));
     }
 
     String title(String page) {
@@ -152,7 +163,7 @@ final class MonetPages {
     }
 
     void themeHeader() {
-        boolean known = state != null && state.installed() && state.activeKnown;
+        boolean known = state != null && state.installed() && state.activeKnown && !failed() && observation.confirmedAt > 0;
         a.ui.headerToggle("莫奈取色", a::onBackPressed, known ? Boolean.valueOf(state.active) : null,
                 !a.working() && known, () -> moduleAction(state.active ? "disable" : "enable"));
     }
@@ -168,44 +179,28 @@ final class MonetPages {
     // ------------------------------------------------------------------
 
     void refresh(boolean force) {
-        if (a.destroyed() || a.working()) return;
-        if (!force && System.currentTimeMillis() - readAt < MainActivity.FRESH_MS) return;
+        sync();
+        if (a.destroyed() || a.working() || refreshing) return;
+        if (!force && observation.fresh(System.currentTimeMillis(), MainActivity.FRESH_MS)) return;
         refreshing = true;
-        error = "";
         a.render();
         IO.execute(() -> {
-            ModuleManager.State read = null;
-            String problem = "";
             try {
-                read = ModuleManager.read(a);
+                ModuleManager.read(a);
             } catch (Exception e) {
-                problem = WatchActivity.message(e);
+                // ModuleManager publishes the failure without discarding the last value.
             }
-            final ModuleManager.State current = read;
-            final String message = problem;
             a.runOnUiThread(() -> {
                 if (a.destroyed()) return;
                 refreshing = false;
-                accept(current, message);
+                sync();
                 a.render();
                 if (a.page.equals("theme")) {
-                    if (current != null && !current.installed()) a.leave("theme");
+                    if (state != null && !failed() && !state.installed()) a.leave("theme");
                     else if (reachable()) themeAction("preview");
                 }
             });
         });
-    }
-
-    /** 记下读到的状态：成功时也存进 prefs，供下次打开时先显示。 */
-    private void accept(ModuleManager.State current, String message) {
-        state = current;
-        error = message;
-        if (current != null) {
-            readAt = System.currentTimeMillis();
-            prefs.edit().putString("monetKind", current.kind).putBoolean("monetActive", current.active)
-                    .putBoolean("monetKnown", current.activeKnown).putString("monetMessage", current.message).apply();
-        }
-        if (!reachable()) connected = false;
     }
 
     // ------------------------------------------------------------------
@@ -239,7 +234,7 @@ final class MonetPages {
                     ack = pair[0];
                     if (pair[1] != null) feedback = "预览读取未完成，已显示当前实际设置。";
                 }
-                persistConfirmed(ack, mutation);
+                persistConfirmed(ack);
                 final JSONObject confirmed = ack;
                 final String message = feedback;
                 a.runOnUiThread(() -> {
@@ -251,13 +246,16 @@ final class MonetPages {
                 });
             } catch (Exception e) {
                 if (mutation) recoverTheme(e);
-                else a.runOnUiThread(() -> {
+                else {
+                    RuntimeStateStore.failMonet(a, e);
+                    a.runOnUiThread(() -> {
                     if (a.destroyed()) return;
                     themeBusy = false;
                     connected = false;
                     themeMessage = WatchActivity.message(e);
                     a.render();
                 });
+                }
             }
         });
     }
@@ -270,16 +268,17 @@ final class MonetPages {
         if (!prefs.edit().putBoolean("pendingTheme", true).commit()) throw new IOException("无法保存待确认状态，本次未提交");
     }
 
-    private void persistConfirmed(JSONObject ack, boolean changed) throws Exception {
+    private void persistConfirmed(JSONObject ack) throws Exception {
         JSONObject current = ack.getJSONObject("state");
         ThemeConfig actual = configFromState(current);
-        SharedPreferences.Editor edit = prefs.edit().putString("lastThemeState", current.toString()).putBoolean("pendingTheme", false)
+        SharedPreferences.Editor edit = prefs.edit().putBoolean("pendingTheme", false)
                 .putString("mode", actual.mode).putInt("seed", actual.seed).putBoolean("corners", actual.corners);
         if (!edit.commit()) throw new IOException("已读取实际设置，但本地记录保存失败");
-        if (changed) OWOrnateWidgetStore.recordAppliedTheme(a, actual);
+        RuntimeStateStore.recordTheme(a, actual);
     }
 
     private void acceptTheme(JSONObject ack, boolean syncSelection) {
+        sync();
         try {
             JSONObject current = ack.getJSONObject("state");
             connected = true;
@@ -296,7 +295,7 @@ final class MonetPages {
     }
 
     private void recoverTheme(Exception problem) {
-        OWOrnateWidgetStore.invalidate(a);
+        RuntimeStateStore.failMonet(a, problem);
         a.runOnUiThread(() -> {
             if (a.destroyed()) return;
             connected = false;
@@ -307,9 +306,10 @@ final class MonetPages {
         String message = "操作未确认：" + WatchActivity.message(problem);
         try {
             recovered = ThemeRuntime.exchange(a, "read", null);
-            persistConfirmed(recovered, false);
+            persistConfirmed(recovered);
             message += "；已按实际状态更新。";
         } catch (Exception readError) {
+            RuntimeStateStore.failMonet(a, readError);
             message += "；请重新读取状态。";
         }
         final JSONObject actual = recovered;
@@ -357,34 +357,32 @@ final class MonetPages {
         final boolean inline = action.equals("enable") || action.equals("disable");
         opBusy = true;
         operation = action;
-        error = "";
         themeMessage = "";
         connected = false;
         if (inline) a.render();
         else a.replace("progress");
         IO.execute(() -> {
             String problem = "";
-            ModuleManager.State after = null;
             try {
-                if (action.equals("install")) after = ModuleManager.install(a);
-                else if (action.equals("enable")) after = ModuleManager.setEnabled(a, true);
-                else if (action.equals("disable")) after = ModuleManager.setEnabled(a, false);
-                else if (action.equals("uninstall")) after = ModuleManager.uninstall(a);
+                if (action.equals("install")) ModuleManager.install(a);
+                else if (action.equals("enable")) ModuleManager.setEnabled(a, true);
+                else if (action.equals("disable")) ModuleManager.setEnabled(a, false);
+                else if (action.equals("uninstall")) ModuleManager.uninstall(a);
             } catch (Exception e) {
                 problem = WatchActivity.message(e);
                 try {
-                    after = ModuleManager.read(a);
+                    ModuleManager.read(a);
                 } catch (Exception readError) {
                     problem += "；状态读取失败：" + WatchActivity.message(readError);
                 }
             }
             final String message = problem;
-            final ModuleManager.State current = after;
             a.runOnUiThread(() -> {
                 if (a.destroyed()) return;
                 opBusy = false;
-                accept(current, message);
+                sync();
                 if (inline) {
+                    themeMessage = message;
                     a.render();
                     if (a.page.equals("theme") && reachable()) themeAction("preview");
                 } else {
@@ -448,7 +446,7 @@ final class MonetPages {
     private void theme() {
         WorkshopUi ui = a.ui;
         if (state != null && !state.installed()) {
-            ui.note("尚未安装莫奈取色。");
+            ui.note(statusText(), incompatible() ? "warning" : "");
             ui.row("查看功能介绍", "", "compass", () -> a.go("detail"));
             return;
         }

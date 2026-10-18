@@ -29,6 +29,9 @@ local.properties
 .idea/
 .gradle/
 *.iml
+__pycache__/
+*.pyc
+*.pyo
 
 # 系统
 Thumbs.db
