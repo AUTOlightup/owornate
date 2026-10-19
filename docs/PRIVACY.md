@@ -10,4 +10,4 @@ OWOrnate 无账号系统、遥测或在线课表同步。现有实现的网络�
 
 发布包不包含签名私钥、口令、ADB 私钥、用户课表或设备备份。许可证见 [THIRD-PARTY.md](THIRD-PARTY.md)。本版已有部分实机确认，完整范围与待测项目见 [VALIDATION.md](VALIDATION.md)。
 
-截屏与录屏使用本机 root 通道调用内置固定包装脚本和系统 screencap/screenrecord。截图保存到 `Pictures/OWOrnate`，视频保存到 `Movies/OWOrnate` 并交给本机媒体扫描，不上传。录屏无声，前台服务在录制期间持有有限亮屏锁，结束后释放。停用模块保留已有图片、视频及画质设置；公开入口仅接受固定动作，不接收任意命令或输出路径。
+截屏与录屏使用本机 root 通道调用内置固定包装脚本和系统 screencap/screenrecord。截图保存到 `Pictures/Screenshots`，视频保存到 `Movies/Screenrecords` 并交给本机媒体扫描，不上传。录屏无声，前台服务在录制期间持有有限亮屏锁，结束后释放。停用模块保留已有图片、视频及画质设置；公开入口仅接受固定动作，不接收任意命令或输出路径。

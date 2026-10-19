@@ -86,6 +86,19 @@ abstract class WatchActivity extends Activity {
         return scroll.getScrollY();
     }
 
+    /** Keep an explicit primary action visible while the page above it scrolls. */
+    final void pinBelowContent(View footer) {
+        ((ViewGroup) scroll.getParent()).removeView(scroll);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setBackgroundColor(WorkshopUi.BG);
+        layout.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        layout.addView(footer, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        setContentView(layout);
+    }
+
     /** 指定某页下次显示时的滚动位置（恢复实例状态、或要求回到页首时用）。 */
     final void remember(String page, int y) {
         positions.put(page, y);

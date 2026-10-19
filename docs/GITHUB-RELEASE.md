@@ -1,27 +1,19 @@
 # GitHub 发布说明
 
-当前预发布为 [v1.0.1-rc8 / code17](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc8)。
+当前预发布为 [v1.0.1-rc9 / code18](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc9)。
 
-## 版本内容
+新增快捷录屏首屏，并调整截屏、录屏保存目录。
 
-新增与莫奈取色、负一屏小组件并列的“截屏与录屏”模块，提供控制中心短按采集、录屏设置与停止、长按对应 OWOrnate 页面。系统原生 PNG 与无声 H.264/MP4，原分辨率、单段最多 180 秒、码率 0.6 / 1.2 / 2.4 Mbps；实际帧率随画面更新变化，不保证固定 60fps。独立编码 helper 延后。
+- 新截图保存到 `Pictures/Screenshots`，录屏保存到 `Movies/Screenrecords`；旧版本文件保留原位，新文件继续加入系统媒体库。
+- 未录制时直接显示轻量录屏页，后台确认真实会话，减少打开前的重复查询和等待；开始录屏仍在页面退出后执行。
+- 三档画质横排、记住上次选择、开始按钮固定首屏底部。分辨率、格式、保存位置和时长收进“更多说明”，状态变化原地更新。
 
-同时包含 code16 的共享 Hook 识别及错误展示修复，以及 code17 的状态来源、缓存、读写边界整理。读取失败保留上次确认值并显示错误；打开管理器和读取状态不再隐式恢复组件或修改后台白名单。
+已有授权用户同签覆盖安装APK即可。已接入v12的共享Hook和helper v6保持原字节，本次更新无需因这些改动重新接入或重载Launcher。首次安装仍使用Windows包 `00-Setup.cmd`，再从管理器对应模块页接入。
 
-首次安装与授权使用 Windows 包 `00-Setup.cmd`；已有授权用户同签覆盖 APK 后，从管理器模块页安装或重新接入。共享接入识别已知 Hook v9/v10/v11/v12 + helper v6，更新目标为 v12。详见 [INSTALL.md](INSTALL.md)。
+本版已在OPPO Watch 2 / A.92同签装表，验证首屏、画质记忆、更多说明、返回后开始、录制中设置、手动停止、新目录和媒体库索引；19.03秒402×476 H.264样本解码通过，结束后服务及亮屏锁释放。原生捕获模拟14/14、控制中心桥接6/6和完整构建通过。180秒自动结束等其余完整验证属于code17历史证据，本版未整体重跑。
 
-## 附件
+原生录屏仍为无声、单段最多180秒，实际帧率随画面更新变化，不提供固定60fps。三档画质与高运动帧率、第三方应用完整动线、长期功耗、MCU和整机重启恢复仍待验收。
 
-- `OWOrnate-v1.0.1-rc8.apk`：295,828 bytes，SHA256 `a2ed3957d5a384dbde7ebfa8c391f1216140788766039705360194da884c2d2f`。
-- `OWOrnate-v1.0.1-rc8-Windows.zip`：首次安装、授权和电脑备用入口。
-- `owornate-v1.0.1-rc8-source.zip`：管理器、共享 Hook、原生捕获脚本、运行 helper、测试与文档。
-- `watch2-monet-v6-source.zip`：主题 helper v6 源码，主题运行件版本不变。
-- `SHA256SUMS.txt`：上述四个文件的摘要。
+附件：APK、Windows包、管理器源码、主题helper v6源码及SHA256SUMS。APK沿用已装表验证的原始签名字节，本次发布未重新编译。APK SHA256：`8409dc95a72a274e35aeff119e6b6d5c4e9e803d24493b3e5ab7c010738b0367`。
 
-发布由 `make-release.ps1` 按白名单导出，不包含本机 HANDOFF/AGENTS、签名材料、ADB 私钥、设备备份或个人日志。Windows PowerShell 脚本导出为 UTF-8 BOM；部署载荷保留原始字节，Git 换行规则由 `.gitattributes` 固定。
-
-## 已验证与限制
-
-code17 已同签装表，原表完成捕获模块启停、两个按钮与长按、表盘 PNG、手动停止和 180 秒自动结束；视频解码及服务/亮屏锁收尾通过。状态17、信息卡13、捕获14、控制中心6、小组件管理97、生命周期85项离线检查通过。
-
-第三方应用动线、码率/高运动帧率比较、旧卡片完整交互、长期功耗、锁屏/MCU/轻智能及整机重启恢复仍待验收。静态画面输出帧少，MP4 播放时长可能短于实际录制墙钟时长。详见 [VALIDATION.md](VALIDATION.md) 和 [ACCEPTANCE.md](ACCEPTANCE.md)。
+[安装说明](https://github.com/AUTOlightup/owornate/blob/v1.0.1-rc9/docs/INSTALL.md) · [验证范围](https://github.com/AUTOlightup/owornate/blob/v1.0.1-rc9/docs/VALIDATION.md) · [原生截屏录屏](https://github.com/AUTOlightup/owornate/blob/v1.0.1-rc9/docs/截屏录屏-原生版.md)

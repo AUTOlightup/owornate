@@ -59,8 +59,11 @@ public final class CaptureService extends Service {
         if(intent==null){finishService();return START_NOT_STICKY;}
         final String action=intent.getStringExtra("action");
         final int bitrate=intent.getIntExtra("bitrate",1200000);
-        // The transparent entry has finished before we capture the underlying window.
-        main.postDelayed(()->IO.execute(()->{currentRequest=startId;perform(action,bitrate);}),200);
+        Runnable execute=()->IO.execute(()->{currentRequest=startId;perform(action,bitrate);});
+        // Screenshots wait for the transparent entry to leave. Recording starts
+        // already wait in the options page's onStop; stop needs no window delay.
+        if("screenshot".equals(action))main.postDelayed(execute,200);
+        else execute.run();
         return START_NOT_STICKY;
     }
     private void perform(String action,int bitrate){

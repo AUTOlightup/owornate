@@ -3,8 +3,8 @@
 set -u
 BASE=/data/local/tmp/owornate-capture
 SOURCE=/data/user/0/dev.codex.watchworkshop/files/capture/capture.sh
-PICTURES=/sdcard/Pictures/OWOrnate
-MOVIES=/sdcard/Movies/OWOrnate
+PICTURES=/sdcard/Pictures/Screenshots
+MOVIES=/sdcard/Movies/Screenrecords
 STATE=$BASE/state
 LOCK=$BASE/operation.lock
 locked=0

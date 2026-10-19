@@ -24,8 +24,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="dev.codex.watchworkshop"
-    android:versionCode="17"
-    android:versionName="1.0.1-rc8">
+    android:versionCode="18"
+    android:versionName="1.0.1-rc9">
 
     <uses-sdk
         android:minSdkVersion="26"

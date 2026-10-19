@@ -15,7 +15,7 @@ public final class CaptureScreenshotActivity extends WatchActivity {
             ui.header("截屏",false,this::onBackPressed,null);
             ui.note("OWOrnate · 截屏与录屏模块");
             ui.value("图片格式","原屏 PNG");
-            ui.value("保存位置","Pictures/OWOrnate");
+            ui.value("保存位置","Pictures/Screenshots");
             ui.note("短按控制中心截屏按钮，面板收起后截图；长按进入本页。");
             ui.button("返回后截屏",true,()->{
                 if(pending)return;

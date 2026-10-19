@@ -1,6 +1,6 @@
 # 源码与打包
 
-**预发布版本：1.0.1-rc8 / versionCode 17。** 已生成同签名 APK `dist/OWOrnate-v1.0.1-rc8.apk`；Windows 包、源码包与摘要由 `make-release.ps1` 统一生成，随 [v1.0.1-rc8](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc8) 提供。
+**预发布版本：1.0.1-rc9 / versionCode 18。** 已生成同签名 APK `dist/OWOrnate-v1.0.1-rc9.apk`；Windows 包、源码包与摘要由 `make-release.ps1` 统一生成，随 [v1.0.1-rc9](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc9) 提供。
 
 ## 源码范围
 
@@ -16,7 +16,7 @@
 
 遵循仓库根目录构建说明生成候选 APK 与 Windows 包。发布包需要包含电脑备用入口 `02-EnableWidgets.cmd`。源码归档清单应验证 `widget-host/` 与脚本确实进入压缩包，并检查许可证保留和敏感文件排除。
 
-本版 APK 为 `OWOrnate-v1.0.1-rc8.apk`，versionCode 17，沿用原签名且不可调试，295,828 bytes，SHA256 `a2ed3957d5a384dbde7ebfa8c391f1216140788766039705360194da884c2d2f`。文件摘要见交付目录 SHA256SUMS.txt。本轮发布不重建 APK，附件沿用该 APK 字节。
+本版 APK 为 `OWOrnate-v1.0.1-rc9.apk`，versionCode 18，沿用原签名且不可调试，295,828 bytes，SHA256 `8409dc95a72a274e35aeff119e6b6d5c4e9e803d24493b3e5ab7c010738b0367`。文件摘要见交付目录 SHA256SUMS.txt。本轮发布不重建 APK，附件沿用该 APK 字节。
 
 打包内容：Windows 包与管理器源码包带 `docs/`，`README-public.md` 复制为包根 `README.md`，其中 `docs/README-public.md` 的链接前缀会相应调整；`docs/screenshots/` 是历史验证记录引用的证据，随引用它们的记录一起保留；工程根目录的 `screenshots/` 不进包。源码包另带 `runtime-helper/`，主题包带 `standalone/`、`licenses/` 与 `PROTOCOL.md`。打包脚本一旦在源码清单里发现签名或密钥材料（`*.jks`、`*.keystore`、`adbkey`、`signing*.properties` 等）就中止。
 
@@ -24,7 +24,7 @@
 
 首页直接列出已安装的功能（负一屏小组件、莫奈取色、截屏与录屏），“发现优化”只在还有可安装项时出现。三类小组件为 OWOrnate 信息、倒计时和课表，卡片尺寸 181×100dp；倒计时可显示系统“纪念日”里的日子（只读接入）。课表支持拾光单表 JSON，不支持 ICS、完整备份或通用皮肤导入。没有在线目录，也没有应用内自动更新。
 
-历史验证（非本版）：code8 课表四项用户实测通过；code9 共享 Hook v10 的 Launcher 重载恢复通过；另有生命周期 68/68、倒计时 94、解析 149、焦点 136 等记录。code17 的状态17、信息卡13、捕获14、控制中心6、小组件管理97、生命周期85项通过，完整构建及原表捕获实测通过；详见 [VALIDATION.md](VALIDATION.md)。
+历史验证（非本版）：code8 课表四项用户实测通过；code9 共享 Hook v10 的 Launcher 重载恢复通过；另有生命周期 68/68、倒计时 94、解析 149、焦点 136 等记录。code18 的原生捕获14项、控制中心桥接6项检查及完整构建通过，已在原表验证快捷页、标准目录、媒体索引与手动启停；code17 的其余测试属于历史证据，未在本版整体重跑；详见 [VALIDATION.md](VALIDATION.md)。
 
 ## 从源码构建
 
@@ -35,7 +35,7 @@
 ./make-release.ps1 -AdbDirectory '<platform-tools>' -FridaInject '<已有匹配版本的frida-inject>' -ReleaseRoot '<不存在的输出目录>'
 ```
 
-签名材料不随源码分发；换签名无法覆盖已有正式安装。构建只产出 APK，不连接设备或运行测试。打包脚本从 `AndroidManifest.xml` 读取版本（当前 17 / 1.0.1-rc8），生成 Windows 入口、源码归档和 SHA256SUMS.txt。
+签名材料不随源码分发；换签名无法覆盖已有正式安装。构建只产出 APK，不连接设备或运行测试。打包脚本从 `AndroidManifest.xml` 读取版本（当前 18 / 1.0.1-rc9），生成 Windows 入口、源码归档和 SHA256SUMS.txt。
 
 ## 构建前提
 

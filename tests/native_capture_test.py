@@ -59,8 +59,8 @@ class Fixture:
         self.bin = self.root / "bin"
         self.proc = self.root / "proc"
         self.base = self.root / "device-base"
-        self.pictures = self.root / "sdcard" / "Pictures" / "OWOrnate"
-        self.movies = self.root / "sdcard" / "Movies" / "OWOrnate"
+        self.pictures = self.root / "sdcard" / "Pictures" / "Screenshots"
+        self.movies = self.root / "sdcard" / "Movies" / "Screenrecords"
         self.script = self.root / "capture.sh"
         self.bin.mkdir()
         self.proc.mkdir()
@@ -111,20 +111,24 @@ output=$5
 printf 'fixture-mp4' > "$output"
 printf '/system/bin/screenrecord --bit-rate %s --time-limit %s %s\000' \
     "$rate" "$limit" "$output" > "$CAPTURE_TEST_PROC/$$.cmdline"
-trap 'rm -f "$CAPTURE_TEST_PROC/$$.cmdline"; printf "INT\n" >> "$CAPTURE_TEST_SIGNAL_LOG"; exit 0' INT
-trap 'rm -f "$CAPTURE_TEST_PROC/$$.cmdline"; printf "TERM\n" >> "$CAPTURE_TEST_SIGNAL_LOG"; exit 0' TERM
+finish() {
+    rm -f "$CAPTURE_TEST_PROC/$$.cmdline"
+    sh "$(dirname "$0")/am" broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+        -d "file://$output" >/dev/null 2>&1 || true
+    exit 0
+}
+trap 'printf "INT\n" >> "$CAPTURE_TEST_SIGNAL_LOG"; finish' INT
+trap 'printf "TERM\n" >> "$CAPTURE_TEST_SIGNAL_LOG"; finish' TERM
 i=0
 while [ "$i" -lt 200 ]; do
     if [ -f "$CAPTURE_TEST_PROC/$$.stop" ]; then
-        rm -f "$CAPTURE_TEST_PROC/$$.cmdline"
         printf 'INT\n' >> "$CAPTURE_TEST_SIGNAL_LOG"
-        exit 0
+        finish
     fi
     sleep 0.05
     i=$((i + 1))
 done
-rm -f "$CAPTURE_TEST_PROC/$$.cmdline"
-exit 0''')
+finish''')
         self._write(self.bin / "kill", r'''#!/bin/sh
 printf '%s\n' "$*" >> "$CAPTURE_TEST_KILL_LOG"
 target=$2
@@ -140,9 +144,9 @@ kill "$@"''')
                                "BASE=" + shlex.quote(posix_path(self.base)))
         source = self._replace(source, "SOURCE=/data/user/0/dev.codex.watchworkshop/files/capture/capture.sh",
                                "SOURCE=" + shlex.quote(posix_path(self.script)))
-        source = self._replace(source, "PICTURES=/sdcard/Pictures/OWOrnate",
+        source = self._replace(source, "PICTURES=/sdcard/Pictures/Screenshots",
                                "PICTURES=" + shlex.quote(posix_path(self.pictures)))
-        source = self._replace(source, "MOVIES=/sdcard/Movies/OWOrnate",
+        source = self._replace(source, "MOVIES=/sdcard/Movies/Screenrecords",
                                "MOVIES=" + shlex.quote(posix_path(self.movies))
                                + "\nPROC=" + shlex.quote(posix_path(self.proc)))
         source = self._replace(source, '"/proc/$pid/cmdline"', '"$PROC/$pid.cmdline"', 2)
@@ -349,6 +353,7 @@ class NativeCaptureTest(unittest.TestCase):
         payload = self.assert_json(f.run("screenshot"), "screenshot")
         output = payload["path"]
         self.assertEqual(Path(output).parent.as_posix(), posix_path(f.pictures))
+        self.assertEqual(Path(output).parent.parts[-2:], ("Pictures", "Screenshots"))
         self.assertRegex(Path(output).name, r"^Screenshot-\d{8}-\d{6}-\d+\.png$")
         self.assertEqual(local_path(output).read_bytes(), b"fixture-png")
         scan = f.text("am")
@@ -423,6 +428,8 @@ class NativeCaptureTest(unittest.TestCase):
         self.assertGreater(started["pid"], 0)
         output = started["path"]
         self.assertTrue(local_path(output).is_file())
+        self.assertEqual(Path(output).parent.as_posix(), posix_path(f.movies))
+        self.assertEqual(Path(output).parent.parts[-2:], ("Movies", "Screenrecords"))
         command = f.text("screenrecord").strip()
         self.assertIn("--bit-rate 1200000 --time-limit 180", command)
         self.assertTrue(command.endswith(output))
@@ -434,6 +441,9 @@ class NativeCaptureTest(unittest.TestCase):
         self.assertEqual(stopped["error"], "")
         self.assertIn("-2 " + str(started["pid"]), f.text("kill"))
         self.assertIn("INT", f.text("signal").splitlines())
+        scan = f.text("am")
+        self.assertIn("android.intent.action.MEDIA_SCANNER_SCAN_FILE", scan)
+        self.assertIn("file://" + output, scan)
 
 
 if __name__ == "__main__":
