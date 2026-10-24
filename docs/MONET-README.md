@@ -24,7 +24,7 @@
 
 - helper 运行在 Launcher 进程内，用 HCT 从当前表盘派生配色，并按 `mode` / `seed` / `corners` 应用。
 - 控制通道是 Launcher 私有目录里的闭合 mailbox：app 写一条固定格式 `request.json`，helper 用 `FileObserver` 响应并写 `ack.json` 回执；app 不提供任意 shell 或外部端口入口。
-- 自有模式使用运行目录 `/data/local/tmp/watchworkshop-runtime`。code26 起，莫奈 `hook.js` 与 helper `theme.jar` 由用户导入并信任的 `.owo` 提供；本候选包为 `monet-1.1.0.owo`。管理器 APK 提供协调器、原生设置接口、运行时脚本和已知共享 Hook 兼容载荷，不再从 APK 回退自有莫奈载荷。
+- 自有模式使用运行目录 `/data/local/tmp/watchworkshop-runtime`。code26 起，莫奈 `hook.js` 与 helper `theme.jar` 由用户导入并信任的 `.owo` 提供；本发布的官方包为 `monet-1.1.0.owo`。管理器 APK 提供协调器、原生设置接口、运行时脚本和已知共享 Hook 兼容载荷，不再从 APK 回退自有莫奈载荷。
 - 共享模式支持已知 WatchHide v9/v10/v11/v12/v13 + helper v6。识别后由管理器管理；未经用户显式接入不替换共享运行文件。Windows Setup 和插件导入都不会自动替换共享 Hook。
 
 `runtime-hook.js` 是旧版合成载荷，随源码保留供兼容与历史检查；当前自有 v4 按 core → 导入插件的功能 Hook → commit 装配，不以这个旧合成文件回退。已知 v3 可迁移并保留已部署载荷与启停选择；旧 v2 的真实迁移仍未验收。自有运行组件不包含 NFC 点击替换、WatchHide 应用隐藏或 QQ 蓝点。
@@ -51,4 +51,4 @@ OWOrnate 1.0.1-rc23 / code32 候选的基础环境拟由 Windows 包的 `00-Setu
 
 ## 状态
 
-当前管理器候选为 code32 / 1.0.1-rc23，本地构建已通过，尚待上传和自动回退实机验收；只增加 A.92 安装来源授权页的回退处理，仍需用户手动开启系统开关并确认安装。APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`，原证书、非 debuggable 与许可资产检查通过。helper v6 与莫奈 1.1.0 的 Hook/theme.jar 字节不变；声明式配色/圆角继续沿用既有实机验收。code31 / rc22 已于 2026-10-24 公开，发布时 `main` 与 tag 指向 `8fed5d49e5de04a61f08163b06428965c9874ae1`，九附件经匿名公网摘要核对；code30 → code31 的应用内下载、包校验、手动系统授权和系统安装器覆盖也已成功，code30 的 v3→v4 迁移及 code31 第三方/v4 重启证据继续有效。code32 的自动回退、旧 v2 真实迁移、实际录制、QQ 送达、长期功耗和其他固件版本仍未验收。
+当前管理器为已公开的 code32 / 1.0.1-rc23，发布于 2026-10-24 23:59（UTC+8），tag 指向 `440f6d4165d3671fd29a88be8a15f7fef27a3d35`。code32 只增加 A.92 安装来源授权页的窄回退，仍需用户手动开启系统开关并确认安装；APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`。helper v6 与莫奈 1.1.0 的 Hook/theme.jar 字节不变；声明式配色/圆角继续沿用既有实机验收。code31 → code32 已完成公网下载、包校验、手动系统授权和系统安装器覆盖；捕获包也完成 1.0.0 → 公网 1.1.0 的下载预览与信任升级，原包字节、画质和运行 Hook 未变。新增 catch 分支仍未实机触发；旧 v2 真实迁移、实际录制、QQ 送达、长期功耗和其他固件版本仍未验收。

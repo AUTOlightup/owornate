@@ -1,10 +1,10 @@
 # 源码与打包
 
-**当前发布候选：1.0.1-rc23 / code32。本地构建已通过，尚待上传和回退实机验收。** code32 修复 A.92 上普通应用无法直接启动安装来源授权页的问题：仅在 `ActivityNotFoundException` 或 `SecurityException` 时回退标准应用信息页，仍要求用户手动开启“允许来自此来源的应用”并在返回后确认系统安装器。候选 APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable 与许可资产检查通过，14 个 APK assets 与 code31 相同。详见 [Launcher 插件](LAUNCHER-PLUGINS.md) 与 [验证记录](VALIDATION.md)。
+**当前公开版本：1.0.1-rc23 / code32。** 已于 2026-10-24 23:59（UTC+8）发布，发布页为 [v1.0.1-rc23](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc23)，发布时 `main` 与 tag 指向 `440f6d4165d3671fd29a88be8a15f7fef27a3d35`；九附件线上大小、摘要和匿名公网下载 SHA-256 全部通过。code32 修复 A.92 上普通应用无法直接启动安装来源授权页的问题：仅在 `ActivityNotFoundException` 或 `SecurityException` 时回退标准应用信息页，仍要求用户手动授权并在返回后确认系统安装器。APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable 与许可资产检查通过，14 个 APK assets 与 code31 相同。详见 [Launcher 插件](LAUNCHER-PLUGINS.md) 与 [验证记录](VALIDATION.md)。
 
 ## 正式附件与源码范围
 
-本次候选维持 9 个顶层正式附件：管理器 APK、Windows 包、管理器完整源码包、莫奈 helper 源码包、三个官方 `.owo`、`owornate-updates.json` 和 `SHA256SUMS.txt`。目录结构不变，文件名随 `v1.0.1-rc23` 重命名；三个官方包仍为 1.1.0 / 1.0.0 / 1.1.0。文件名与用途见 [GitHub 发布说明](GITHUB-RELEASE.md)。
+本次公开版本维持 9 个顶层正式附件：管理器 APK、Windows 包、管理器完整源码包、莫奈 helper 源码包、三个官方 `.owo`、`owornate-updates.json` 和 `SHA256SUMS.txt`。目录结构不变，文件名随 `v1.0.1-rc23` 重命名；三个官方包仍为 1.1.0 / 1.0.0 / 1.1.0。文件名与用途见 [GitHub 发布说明](GITHUB-RELEASE.md)。
 
 `owornate-v1.0.1-rc23-source.zip` 包含管理器 `src/`、资源、测试、`standalone/`、`widget-host/`、`capture/`、`plugins/`、`runtime-helper/`、构建/安装/发布脚本、许可证和文档。`plugins/` 中有三个官方 launcher-v1 包源、shell-v1 熄屏示例、第三方 launcher-v1 常亮示例，以及 `new-plugin.ps1`、`pack-plugin.ps1`、`test-plugin.ps1`、`make-update-catalog.ps1` 和对应测试入口。插件创建、校验、打包和独立清单工具只在这个完整源码包中提供。
 
@@ -16,7 +16,7 @@ Windows 包和管理器源码包都带 `docs/`，包含本目录的发布文档�
 
 ## 运行时与源码边界
 
-code32 候选 APK 继续提供管理器 UI、原生设置与采集服务、运行时协调脚本和已知共享 Hook 兼容载荷；相对 code31，运行载荷不变，只调整系统授权页的失败回退。莫奈、小组件、捕获的 launcher-v1 功能载荷仍由用户导入的 `.owo` 提供。源码树中的 `assets/monet/` 保留部分构建/兼容材料，不能据此推断 APK 含有自有莫奈 `hook.js` 或 `theme.jar`；APK 实际内容以最终发布归档为准。
+code32 公开 APK 继续提供管理器 UI、原生设置与采集服务、运行时协调脚本和已知共享 Hook 兼容载荷；相对 code31，运行载荷不变，只调整系统授权页的失败回退。莫奈、小组件、捕获的 launcher-v1 功能载荷仍由用户导入的 `.owo` 提供。源码树中的 `assets/monet/` 保留部分构建/兼容材料，不能据此推断 APK 含有自有莫奈 `hook.js` 或 `theme.jar`；APK 实际内容以已发布归档为准。
 
 launcher-v1 保留三个官方角色 `dev.owornate.monet`、`dev.owornate.widgets`、`dev.owornate.capture`，同时接受使用自有 safeID 的第三方普通 Hook。第三方包只含 `plugin.json` 与 `hook.js`，不开放原生 Activity、采集服务、任意设置页或通用配置 SDK。需要普通 root 命令和声明式配置时使用 shell-v1；协议、清单、动作和本地测试入口见 [本地插件开发](PLUGIN-DEVELOPMENT.md) 与 [Launcher 插件](LAUNCHER-PLUGINS.md)。
 
@@ -98,8 +98,8 @@ pwsh -File ./tests/run-launcher-plugin-tests.ps1 -JdkHome '<JDK>' -JsonJar '<org
 pwsh -File ./tests/desktop_setup_test.ps1
 ```
 
-插件测试工具只要求 JDK 11+ 与 `org.json` JAR，不执行插件代码，也不需要 Android SDK、ADB 或手表。完整开发流程测试另需 Git Bash；`BuildRoot` 应使用尚不存在的新目录。code31 / rc22 的公开附件、证书、摘要、v4 生命周期、v3 迁移和共享限制证据继续作为历史基线；rc23 / code32 本地构建和载荷身份检查已通过，但自动回退尚未在下一轮实机中触发，见 [VALIDATION.md](VALIDATION.md) 与 [ACCEPTANCE.md](ACCEPTANCE.md)。
+插件测试工具只要求 JDK 11+ 与 `org.json` JAR，不执行插件代码，也不需要 Android SDK、ADB 或手表。完整开发流程测试另需 Git Bash；`BuildRoot` 应使用尚不存在的新目录。code31 / rc22 的公开附件、证书、摘要、v4 生命周期、v3 迁移和共享限制证据继续作为历史基线。rc23 / code32 已公开并完成 code31 → 32 的实际公网下载与系统安装器主链；新增 catch 分支仍未实机触发，见 [VALIDATION.md](VALIDATION.md) 与 [ACCEPTANCE.md](ACCEPTANCE.md)。
 
 ## 历史
 
-code29 的声明式设置与独立部署记录、code28 及更早的本机检查继续保留在 [VALIDATION.md](VALIDATION.md)。code31 / rc22 于 2026-10-24 公开发布，发布时 `main` 与 tag 指向 `8fed5d49e5de04a61f08163b06428965c9874ae1`，九附件已通过匿名公网摘要核对。上述历史不代表 code32 的授权回退已在设备上完成安装。当前未覆盖项以 [ACCEPTANCE.md](ACCEPTANCE.md) 首部为准。
+code29 的声明式设置与独立部署记录、code28 及更早的本机检查继续保留在 [VALIDATION.md](VALIDATION.md)。code31 / rc22 于 2026-10-24 公开发布，发布时 `main` 与 tag 指向 `8fed5d49e5de04a61f08163b06428965c9874ae1`；code32 / rc23 于 2026-10-25 公开发布，tag 指向 `440f6d4165d3671fd29a88be8a15f7fef27a3d35`。两个版本的九附件均通过匿名公网摘要核对。设备已完成 code31 → code32 的应用内更新和恢复，但新增 catch 分支仍待下一次从未授权状态升级时触发。发布归档内的文档是发布前快照；tag 不随本次文档同步移动。当前未覆盖项以 [ACCEPTANCE.md](ACCEPTANCE.md) 首部为准。

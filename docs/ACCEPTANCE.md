@@ -1,22 +1,25 @@
 # OWOrnate 1.0.1-rc23 / versionCode 32 · 当前验收范围
 
-## code32 / 1.0.1-rc23：本地构建通过，自动回退待授权验收
+## code32 / 1.0.1-rc23：已公开发布，公网更新主链通过
 
 code32 针对 A.92 的安装来源授权入口修复：普通应用直接启动 `MANAGE_UNKNOWN_APP_SOURCES` 时被 `Settings$ManageAppExternalSourcesActivity not exported` 阻止。`UpdateActivity` 仅在 `ActivityNotFoundException` 或 `SecurityException` 时回退到 `ACTION_APPLICATION_DETAILS_SETTINGS`，显示明确操作文案；用户仍须在 `SingleAppManagerActivity` 中手动打开“允许来自此来源的应用”，返回管理器后仍须确认系统安装器。不得自动授予权限或自动确认安装。
 
-code30 → code31 主链已完成：GitHub API 可发现更新，但 `github.com` 附件直连超时。经已有 PC 代理，应用成功发现并下载 code31，包名、版本、签名和 SHA-256 校验通过。用户手动进入标准应用信息页开启“允许来自此来源的应用”，返回管理器确认安装，再由 `HeytapPackageInstallerActivity` 点击安装；安装后 APK 摘要确认当前为 code31。
+2026-10-25，code32 已公开发布，发布时 `main` 与 tag 指向 `440f6d4165d3671fd29a88be8a15f7fef27a3d35`。手表在 code31 上从公网发现 code32，应用内下载后核对包名、版本、签名和 SHA-256；用户点击确认安装，再由 `HeytapPackageInstallerActivity` 点击安装，最终 current APK 摘要为 code32。该结果不是 `adb install`。手表 API 可达，但 `github.com` 附件直连超时；临时借用已有 PC 代理完成下载，电脑代理、TUN 和 firewall 未修改。
 
-rc23 / code32 本地构建已通过：341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable、许可资产通过，14 assets 与 code31 相同。候选尚待发布；code32 的自动回退尚未在新一轮实机中触发，三个官方插件包版本不变，code31 的运行载荷、第三方插件、v4 环境及既有本机证据作为历史回归基线沿用。
+捕获插件通过同样公网来源从 1.0.0 下载 1.1.0，完成预览和“信任并升级”；原导入 `plugin.json`/`hook.js` 字节、录屏画质和运行 Hook 不变。收尾 17 项恢复检查全部通过：管理器原 `files` 与 `shared_prefs` 完全恢复且无新增文件；保护组件与 keys、Launcher 偏好/PID/boot、主题 previous、无自有 runtime、capture idle 不变；5 个代理相关键与全局 unknown sources 恢复原 null，安装来源 AppOp 恢复 default；原 10 秒熄屏、31 表盘/10 复杂功能/5 卡片/41 应用顺序一致，最终 Asleep。
+
+code32 APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable、许可资产通过，14 assets 与 code31 相同。九附件线上大小/digest 和匿名公网下载 SHA 全部核对通过；已发布附件保持原字节，tag 不随文档同步移动。
 
 | 检查项 | 当前结论 | 说明 |
 | --- | --- | --- |
 | 直接 `MANAGE_UNKNOWN_APP_SOURCES` | 受阻 | A.92 系统 Activity 未导出 |
-| 标准应用信息页手动路径 | 通过 | 可进入单应用管理页，用户手动开启来源开关 |
-| code32 自动回退 | 待验收 | 本地回退代码尚未在该版本设备流程中触发 |
-| 用户手动授权 | 通过 | 开关已开启 |
-| 系统安装器确认与覆盖 | 通过（code31） | `HeytapPackageInstallerActivity` 安装，当前摘要确认 code31 |
-| rc23 构建与载荷身份 | 通过 | 原证书、非 debug、许可通过；14 assets 与 code31 相同 |
-| rc23 发布、自动回退与安装后状态 | 待完成 | 不能以 code31 安装结果替代 code32 新回退验收 |
+| 标准应用信息页目标路径 | 通过 | 可进入单应用管理页，用户手动开启来源开关 |
+| code32 catch/fallback 实际触发 | 待验收 | 两次安装前均已手动授权，新 catch 分支未触发 |
+| code31 → code32 公网更新 | 通过 | 发现、下载、包名校验、版本/签名/hash、确认安装及系统安装器 UI 全链通过 |
+| 安装后 APK 身份 | 通过 | current 摘要为 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；非 ADB 安装 |
+| capture 1.0.0 → 公网 1.1.0 | 通过 | 预览和“信任并升级”完成；原字节、画质、运行 Hook 不变 |
+| 发布附件 | 通过 | 九附件线上大小/digest 与匿名公网下载 SHA 全部通过 |
+| 恢复 | 17 项全部通过 | 原管理器、保护组件、Launcher、主题、设置、无自有 runtime、capture idle、表盘/复杂功能/卡片/应用顺序、最终 Asleep |
 
 # 历史：OWOrnate 1.0.1-rc22 / versionCode 31 · 验收范围
 

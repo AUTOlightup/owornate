@@ -1,6 +1,6 @@
 # 安装、首次设置与插件导入
 
-**当前发布候选：1.0.1-rc23 / code32。本地构建已通过，尚待上传和自动回退实机验收。** 本版修复 A.92 上普通应用无法直接启动 `MANAGE_UNKNOWN_APP_SOURCES` 设置页的问题：只在 `ActivityNotFoundException` 或 `SecurityException` 时回退标准应用信息页，并要求用户手动打开“允许来自此来源的应用”。授权和系统安装确认都不自动完成。launcher-v1 继续使用 code30 的第三方接口与 v4 运行环境；共享 WatchHide 环境不部署第三方 Hook。Launcher 插件协议见同一文档目录中的 `LAUNCHER-PLUGINS.md`，验收边界见 [验证记录](VALIDATION.md)。
+**当前公开版本：1.0.1-rc23 / code32，发布于 2026-10-24 23:59（UTC+8）。** 本版修复 A.92 上普通应用无法直接启动 `MANAGE_UNKNOWN_APP_SOURCES` 设置页的问题：只在 `ActivityNotFoundException` 或 `SecurityException` 时回退标准应用信息页，并要求用户手动打开“允许来自此来源的应用”。授权和系统安装确认都不自动完成。launcher-v1 继续使用 code30 的第三方接口与 v4 运行环境；共享 WatchHide 环境不部署第三方 Hook。Launcher 插件协议见同一文档目录中的 `LAUNCHER-PLUGINS.md`，验收边界见 [验证记录](VALIDATION.md)。
 
 ## 适用范围
 
@@ -36,7 +36,7 @@ OWOrnate-v1.0.1-rc23-Windows/
 
 `plugins/examples/launcher-keep-awake/` 提供第三方示例源码和可直接导入的 `launcher-keep-awake-1.0.1.owo`。该示例不占顶层正式附件，也不进入官方更新清单。插件创建、校验、打包和独立清单工具只随完整管理器源码包提供。
 
-候选 APK 拟命名为 `OWOrnate-v1.0.1-rc23.apk`：341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`。它沿用原证书并保持非 debuggable；许可资产检查通过，14 个 APK assets 与 code31 相同。code32 只增加安装来源授权页的回退处理。
+公开 APK 为 `OWOrnate-v1.0.1-rc23.apk`：341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`。它沿用原证书并保持非 debuggable；许可资产检查通过，14 个 APK assets 与 code31 相同。九附件线上大小、摘要和匿名公网下载校验通过。
 
 ## 电脑首次设置
 
@@ -84,13 +84,13 @@ Setup 只准备管理器运行所需的基础环境，**不安装功能，也不
 
 ## 升级
 
-安装 code27 或更高版本后，可从“设置 → 管理器更新”检查 GitHub 并下载；插件从管理页“检查插件更新”检查。rc22 已于 2026-10-24 公开发布，rc23 已构建但清单尚未上传；不能把本地 rc23 清单当作在线源。下载内容会先校验 ID、版本、大小和 SHA-256；APK 还要求原包名、严格更高 versionCode 与原签名，再交给系统安装器确认。
+安装 code27 或更高版本后，可从“设置 → 管理器更新”检查 GitHub 并下载；插件从管理页“检查插件更新”检查。rc23 已于 2026-10-24 23:59（UTC+8）公开发布，更新清单在线。下载内容会先校验 ID、版本、大小和 SHA-256；APK 还要求原包名、严格更高 versionCode 与原签名，再交给系统安装器确认。
 
 A.92 实测中，普通应用直接启动 `Settings$ManageAppExternalSourcesActivity` 会被系统拒绝，异常为 `not exported`。code32 仅在启动遇到 `ActivityNotFoundException` 或 `SecurityException` 时回退到标准 `ACTION_APPLICATION_DETAILS_SETTINGS` 应用信息页；实际可打开 `SingleAppManagerActivity`，其中显示“允许来自此来源的应用”开关。用户必须手动开启该开关，返回管理器后再次点击确认安装并通过系统安装器确认。管理器不会自动授予该权限，也不会自动确认安装。
 
-code30 → code31 主链已在设备上完成：设备以临时 code30 为起点，GitHub API 可发现更新，但 `github.com` 附件直连超时；经已有 PC 代理，应用下载 code31 并通过包名、版本、签名与 SHA-256 校验。用户随后手动进入标准应用信息页开启来源开关，返回管理器确认安装，再由 `HeytapPackageInstallerActivity` 点击安装；安装后的管理器 APK 摘要确认已是 code31。该成功路径依赖手动导航到系统应用信息页。
+code31 → code32 主链已在 A.92 上完成：手表 API 可达，但直连 `github.com` 附件超时；临时借用已有 PC 代理后，管理器发现并下载公网 code32，并通过包名、版本、签名与 SHA-256 校验。用户点击确认安装，再由 `HeytapPackageInstallerActivity` 点击安装；安装后的管理器 APK 摘要确认为 code32。该结果不是 `adb install`，电脑代理、TUN 与 firewall 未修改。
 
-code32 的自动回退代码已经进入本地候选，但尚未在新一轮设备流程中触发。必须重新从安装来源未授权状态验证它能直接打开应用信息页，并保留用户手动开启开关、返回确认和系统安装器确认这几步，才可把自动回退记为实机通过。
+code32 的标准目标页面路径已经实测，但新增 catch/fallback 分支尚未实际触发：两次系统安装均在普通应用信息页已经手动授权后完成。必须在下一次从未授权状态升级时验证管理器能由 `ActivityNotFoundException` 或 `SecurityException` 进入应用信息页，同时保留用户手动授权、返回确认和系统安装器确认，才可把该分支记为实机通过。
 
 插件也可以直接导入新版 `.owo`。脚本插件必须先停用；同 ID、同 runtime、严格更高 versionCode 才可升级。升级保留 `config.json`、旧默认值和 `data/<id>`；新包 status 无法确认停用或配置不兼容时恢复旧包。launcher-v1 升级只替换导入包，部署由用户另行确认。
 
@@ -106,7 +106,7 @@ adb install -r OWOrnate-v1.0.1-rc23.apk
 
 “服务已启动”表示守护进程已运行；只有服务确认当前 Launcher 的运行时已经就绪，管理器才显示“功能已就绪”。开机记录使用 `bootReady`，旧 `bootOk` 不作为就绪证据，手动恢复也不生成开机成功记录。`VerifyBoot` 同步检查新记录及实际运行状态；共享环境只检查既有 Hook/helper，不证明管理器自有组件开机恢复。
 
-code31 / rc22 已在自有 v4 环境完成真实重启，首次打开管理器前取得当前 bootId 对应的就绪状态和实际运行映射。该历史证据沿用；code30 已验证的 v3→v4 迁移保留已部署载荷与启停选择，旧 v2 的真实迁移仍未验收。code32 尚未完成新一轮应用内更新或重启验收。
+code31 / rc22 已在自有 v4 环境完成真实重启，首次打开管理器前取得当前 bootId 对应的就绪状态和实际运行映射。该历史证据沿用；code30 已验证的 v3→v4 迁移保留已部署载荷与启停选择，旧 v2 的真实迁移仍未验收。code32 已完成应用内更新主链和恢复检查；该轮没有以 code32 整机重启作为覆盖项。
 
 ## 独立生命周期与移除
 

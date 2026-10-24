@@ -1,8 +1,8 @@
-# OWOrnate 1.0.1-rc23 / versionCode 32（预发布）
+# OWOrnate 1.0.1-rc23 / versionCode 32（已公开发布）
 
-发布地址：[v1.0.1-rc23](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc23)。九个附件按打包时原字节提供；源码归档中的候选说明保留为准备阶段快照。
+**发布状态：已于 2026-10-24 23:59（UTC+8）公开发布。** 发布页为 [v1.0.1-rc23](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc23)，发布时 `main` 与 tag 指向提交 `440f6d4165d3671fd29a88be8a15f7fef27a3d35`。九个线上附件的大小与摘要已核对，全部匿名公网下载 SHA-256 通过。
 
-候选管理器 APK 发布文件名为 `OWOrnate-v1.0.1-rc23.apk`：341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`。原证书、非 debuggable 和许可资产检查通过；14 个 APK assets 与 code31 相同。
+管理器 APK 为 `OWOrnate-v1.0.1-rc23.apk`：341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`。原证书、非 debuggable 和许可资产检查通过；14 个 APK assets 与 code31 相同。
 
 ## 本版变化
 
@@ -36,9 +36,11 @@
 - code30 已验证的 v3→v4 迁移、第三方升级、无 trace 常亮效果及其他本机检查继续有效；code31 全部 14 个 APK assets 与 code30 相同。
 - 真实 AdbClient 6 项回归、完整构建、原证书、非调试与许可资产检查通过；Windows 符号链接断言因权限跳过，不声称通过。
 
-当前 A.92 阶段：设备以临时 code30 作为起点；GitHub API 可发现更新，但 `github.com` 附件直连超时。经已有 PC 代理，应用成功发现并下载 code31，包名、版本、签名和 SHA-256 校验通过。直接安装来源授权 Activity 被系统拒绝后，用户手动进入标准应用信息页开启“允许来自此来源的应用”，返回管理器确认安装，再由 `HeytapPackageInstallerActivity` 点击安装；当前已安装 APK 摘要确认升级到 code31，主链成功。该路径需要手动绕到系统应用信息页；code32 的自动回退尚未在新一轮实机中触发。
+当前 A.92 主链已完成：手表在 code31 上从公网发现 code32，应用内下载后核对包名、版本、签名和 SHA-256；用户点击确认安装，再由 `HeytapPackageInstallerActivity` 点击安装，安装后的 current APK 摘要确认为 code32。该结果不是 `adb install`。现有网络环境为手表 API 可达、直连 `github.com` 附件超时；临时借用已有 PC 代理后完成下载，电脑代理、TUN 和 firewall 未改。
 
-**未覆盖：** rc23 / code32 的自动回退触发、发布、安装后状态及重启；旧 v2 真实迁移、其他硬件/固件、本版实际录制、QQ 送达和长期功耗。代理下载和包校验本身不是安装证据；本阶段另以上述实际系统安装器界面与安装后 APK 摘要确认主链成功。详见 [验证记录](https://github.com/AUTOlightup/owornate/blob/v1.0.1-rc23/docs/VALIDATION.md) 与 [验收范围](https://github.com/AUTOlightup/owornate/blob/v1.0.1-rc23/docs/ACCEPTANCE.md)。
+捕获插件已从 1.0.0 通过公网发现并下载 1.1.0，完成预览和“信任并升级”；原插件文件字节、录屏画质和运行 Hook 保持不变。收尾 17 项恢复检查全部通过：管理器原 `files` 与 `shared_prefs` 且无新增文件；保护组件与 keys、Launcher 偏好/PID/boot、主题 previous、无自有 runtime 和 capture idle 不变；5 个代理相关键与全局 unknown sources 原为 null，安装来源 AppOp 恢复 default；10 秒熄屏、31 表盘/10 复杂功能/5 卡片/41 应用顺序原样，最终 Asleep。
+
+**仍未覆盖：** code32 新增 `ActivityNotFoundException | SecurityException` catch 分支的实际触发。两次安装均在普通应用信息页已经手动授权后完成；标准目标页面路径已有实机证据，但下次从未授权状态升级时仍须单独触发该分支。旧 v2 真实迁移、其他硬件/固件、实际录制、QQ 送达和长期功耗也不在本轮证据内。详见 [验证记录](https://github.com/AUTOlightup/owornate/blob/v1.0.1-rc23/docs/VALIDATION.md) 与 [验收范围](https://github.com/AUTOlightup/owornate/blob/v1.0.1-rc23/docs/ACCEPTANCE.md)。
 
 ## 附件（9）
 
@@ -60,7 +62,7 @@
 
 `owornate-updates.json` 使用 `schemaVersion: 1`，包含管理器 `dev.codex.watchworkshop` 和三个官方插件 ID，每个 ID 只出现一次。rc23 的管理器条目应为 1.0.1-rc23 / code32，莫奈为 1.1.0 / code2，小组件为 1.0.0 / code1，捕获为 1.1.0 / code2。清单须引用同 tag 下的实际附件；摘要用于传输完整性，不代表第三方作者签名。
 
-上传时必须同时提供清单及其引用的原文件，不能只传清单或改名后沿用旧清单。code26 及更早版本没有这套应用内更新入口，需要先手动同签升级。code27 及更高客户端能读取发布清单；rc23 已构建，但其自动回退仍需在下一次实机更新中单独触发验证。
+上传时必须同时提供清单及其引用的原文件，不能只传清单或改名后沿用旧清单。code26 及更早版本没有这套应用内更新入口，需要先手动同签升级。code27 及更高客户端能读取发布清单；rc23 已公开，但新增 catch 分支仍需在下一次从未授权状态升级时单独触发验证。
 
 ## 许可与隐私
 
@@ -70,6 +72,4 @@
 
 [v1.0.1-rc22](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc22) 已于 2026-10-24 公开。发布时 `main` 与 tag 指向提交 `8fed5d49e5de04a61f08163b06428965c9874ae1`；九个附件已完成匿名公网下载和 SHA-256 核对。该版本修复 ADB 无行尾换行输出截断，并在设备上完成第三方插件与 v4 重启验收。后续在临时 code30 上通过代理完成附件下载和包校验，手动进入系统应用信息页授权后，管理器确认安装，再由系统安装器完成 code31 覆盖；安装后摘要已确认。
 
-## 发布时补充
-
-捕获插件1.0.0→1.1.0已通过手表实际公网下载、预览及“信任并升级”；原导入包字节、画质和共享运行组件保留，未部署组件或启动录制。本次网络使用已有PC代理临时连接；附件直连超时，未更改电脑代理配置。code32自动回退分支仍按上述边界单独说明，不把手动设置入口的成功当作新分支实测。
+rc23 的九个已发布附件保持原字节，tag 不随本次文档同步移动。发布归档内的文档是发布前准备快照；默认分支中的这组文档补充了发布后的实机更新、capture 包升级和恢复结果。

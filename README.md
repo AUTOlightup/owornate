@@ -1,6 +1,6 @@
 # OWOrnate
 
-**1.0.1-rc23 / code32**，下载与完整附件见 [GitHub 预发布](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc23)。 本版针对 A.92 上普通应用无法启动 `MANAGE_UNKNOWN_APP_SOURCES` 设置页的问题：仅在启动遇到 `ActivityNotFoundException` 或 `SecurityException` 时回退到标准应用信息页，并用明确文案提示用户打开“允许来自此来源的应用”。授权仍由用户在系统界面手动完成，返回管理器后仍须再次确认系统安装器操作；管理器不会自动授予权限或静默安装。第三方 `launcher-v1`、v4 自有运行环境和三个官方插件包版本沿用 code31，见 [Launcher 插件](docs/LAUNCHER-PLUGINS.md)与 [验证记录](docs/VALIDATION.md)。
+**当前公开版本：1.0.1-rc23 / code32。** 本版针对 A.92 上普通应用无法启动 `MANAGE_UNKNOWN_APP_SOURCES` 设置页的问题，增加仅在 `ActivityNotFoundException` 或 `SecurityException` 时进入标准应用信息页的回退。授权仍由用户在系统界面手动完成，返回管理器后仍须再次确认系统安装器操作；管理器不会自动授予权限或静默安装。第三方 `launcher-v1`、v4 自有运行环境和三个官方插件包版本沿用 code31，见 [Launcher 插件](docs/LAUNCHER-PLUGINS.md)与 [验证记录](docs/VALIDATION.md)。
 
 OWOrnate（`dev.codex.watchworkshop`）是面向 OPPO Watch 2 的原生 Android 插件管理器，提供统一管理页、右上开关和 `.owo` 导入。莫奈取色、负一屏小组件、截屏与录屏分别提供 launcher-v1 插件包；其他高级权限功能可使用 shell-v1 自行开发。
 
@@ -40,7 +40,7 @@ Windows 包内的 `payload/plugins/` 带有三个官方 `.owo`，但 **Setup 不
 
 ## 更新
 
-管理器可从“设置 → 管理器更新”检查 GitHub，插件从管理页“检查插件更新”检查。公开的 rc22 更新清单包含管理器 31、莫奈 1.1.0、小组件 1.0.0 和捕获 1.1.0；rc23 候选已构建但尚未上传，不能把当前本地源文件当作在线可用版本。
+管理器可从“设置 → 管理器更新”检查 GitHub，插件从管理页“检查插件更新”检查。rc23 已于 2026-10-24 23:59（UTC+8）发布，更新清单包含管理器 32、莫奈 1.1.0、小组件 1.0.0 和捕获 1.1.0；九个线上附件的大小和摘要均已核对。
 
 清单公开后，下载内容会核对 ID、版本、大小和 SHA-256。APK 还必须匹配原包名、严格更高 versionCode 和原签名，之后才交给系统安装器确认。若 A.92 拒绝直接打开安装来源授权页，code32 只回退到系统应用信息页；用户须手动开启其中的“允许来自此来源的应用”开关，再返回管理器确认安装。插件进入同 ID 升级预览；launcher-v1 升级只替换导入包，部署由用户另行确认。
 
@@ -52,9 +52,13 @@ Windows 包内的 `payload/plugins/` 带有三个官方 `.owo`，但 **Setup 不
 
 code30 已验证的 v3→v4 迁移、第三方升级、无 trace 常亮效果和其他本机检查继续有效。code31 / rc22 已于 2026-10-24 公开发布，九附件经匿名公网下载和摘要核对；发布时 `main` 与 tag 指向提交 `8fed5d49e5de04a61f08163b06428965c9874ae1`。rc23 / code32 管理器 APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable、许可资产检查通过，14 个 APK assets 与 code31 相同。
 
-当前 A.92 已完成 code30 → code31 的应用内下载与系统安装主链：GitHub API 可发现更新，但直连 `github.com` 附件下载超时，经已有 PC 代理由应用发现并下载 code31，包名、版本、签名和 SHA-256 校验通过；直接安装来源授权 Activity 被系统拒绝后，手动进入标准应用信息页开启“允许来自此来源的应用”，返回管理器确认安装，再由 `HeytapPackageInstallerActivity` 点击安装，最终确认已安装 APK 为 code31。该成功路径需要手动绕到系统应用信息页；code32 的自动回退尚未在新一轮实机中触发，不能记为自动回退验收通过。
+code32 已于 2026-10-24 23:59（UTC+8）公开，发布时 `main` 与 tag 指向提交 `440f6d4165d3671fd29a88be8a15f7fef27a3d35`；九个附件的线上大小、摘要和匿名公网下载校验通过。A.92 实机已从 code31 经管理器发现并下载公网 code32，核对包名、版本、签名和 SHA-256 后，由用户确认，再经 `HeytapPackageInstallerActivity` 点击安装；安装后的 current APK 摘要确认为 code32。该结果不是 `adb install`。
 
-**未覆盖：** rc23 / code32 的自动回退与安装后状态、旧 v2 真实迁移、其他硬件/固件、本版实际录制、QQ 送达及长期功耗。rc22/code31 的代理下载、手动系统授权和系统安装器覆盖已有通过证据；rc23 尚未发布。详见 [验证记录](docs/VALIDATION.md) 与 [验收范围](docs/ACCEPTANCE.md)。
+捕获插件也从 1.0.0 经公网发现并下载 1.1.0，完成预览和“信任并升级”；原 `plugin.json`/`hook.js` 字节、录屏画质和运行 Hook 均保持不变。收尾 17 项恢复检查全部通过：管理器原 `files` 与 `shared_prefs` 且无新增文件，保护组件与 keys、Launcher 偏好/PID/boot、主题 previous、无自有 runtime 和 capture idle 不变；5 个代理相关键与全局 unknown sources 原为 null，安装来源 AppOp 恢复 default；10 秒熄屏、31 表盘/10 复杂功能/5 卡片/41 应用顺序原样，最终 Asleep。
+
+仍不能声称 code32 新增的 catch/fallback 分支已实际触发：本次 code31 → 32 安装同样是在普通应用信息页已手动授权后完成。标准目标页面路径已有实机证据，下一次从未授权状态升级时仍需单独验证 catch 分支。
+
+**未覆盖：** code32 新增 catch/fallback 分支的实际触发、旧 v2 真实迁移、其他硬件/固件、实际录制、QQ 送达及长期功耗。已公开的九附件保持原字节；发布包内文档是发布前准备快照，本仓库文档记录发布后的设备与恢复结果。详见 [验证记录](docs/VALIDATION.md) 与 [验收范围](docs/ACCEPTANCE.md)。
 
 ## 隐私与源码
 
