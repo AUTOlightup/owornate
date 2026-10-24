@@ -1,12 +1,16 @@
 # Launcher 插件与第三方运行插件
 
-## code30 / 1.0.1-rc21：开放第三方 launcher-v1
+## 当前：1.0.1-rc23 / code32
+
+code32 只修复 A.92 上安装来源授权页无法由普通应用直接启动的问题：遇到 `ActivityNotFoundException` 或 `SecurityException` 时回退标准应用信息页，仍需用户手动开启来源开关并在返回后确认系统安装器。launcher-v1 协议、插件仓库、三个官方包和运行载荷均沿用 code31；本页的第三方插件能力继续有效。rc23 本地构建已通过，尚待发布；新增自动回退尚未在 code32 设备流程中触发。code30 → code31 的代理下载、手动系统授权和系统安装器覆盖已完成。
+
+## 历史沿用：code30 / 1.0.1-rc21 开放第三方 launcher-v1
 
 code30 起，launcher-v1 除保留莫奈、小组件、捕获三个官方角色外，也接受普通的第三方 Launcher Hook。第三方 ID 使用与 shell-v1 相同的 safeID 规则：最多 80 字符的小写反向域名，并拒绝短名 monet、widgets、capture 以及 dev.owornate.monet、dev.owornate.widgets、dev.owornate.capture 及内部状态名 monet.disabled、widgets.disabled、capture.disabled。官方三包的 ID、清单语义、运行接口及文件集合保持原契约；只有 dev.owornate.monet 可以携带 theme.jar。
 
 第三方包只含 plugin.json 与 hook.js。settings 必须为空数组，且不得声明 nativeSettings。code30 没有开放自定义 Activity、任意原生设置页或通用配置 SDK；需要普通 root 命令和声明式配置时继续使用 shell-v1。
 
-code30引入本节接口；当前管理器code31 / 1.0.1-rc22修复无行尾换行JSON的ADB解析，插件初始化错误可显示ID和详情。原无线表已完成v3→v4迁移、第三方升级/启停/卸载重装、常亮效果、失败插件恢复、v4真实重启与共享环境限制验收，测试后原环境与数据已恢复。共享环境下经真实界面确认卸载，仅移除第三方导入包，原插件仓库、共享组件和Launcher进程保持不变。三个官方Hook/JAR及全部code30运行assets未变。code31发布材料按本版源码另行导出，尚未上传GitHub。
+code30 引入本节接口；code31 / 1.0.1-rc22 修复无行尾换行 JSON 的 ADB 解析，插件初始化错误可显示 ID 和详情。该版本已完成 v3→v4 迁移、第三方升级/启停/卸载重装、常亮效果、失败插件恢复、v4 真实重启与共享环境限制验收，测试后原环境与数据已恢复；共享环境下经真实界面确认卸载，仅移除第三方导入包。rc22 已于 2026-10-24 公开发布，发布时 `main` 与 tag 指向 `8fed5d49e5de04a61f08163b06428965c9874ae1`。code32 只修复安装来源授权页回退，不改变上述插件协议。
 
 ### Hook API
 
@@ -55,7 +59,7 @@ factory 已运行在 Java.perform 内，可以直接调用 Java.use。初始化�
 
 打包工具对第三方 launcher-v1 只接受 plugin.json、hook.js 两个顶层文件；额外文件、目录和 theme.jar 均拒绝。hook.js 必须为非空 UTF-8 无 BOM、LF、无 NUL，打包不改变 Hook 原字节。PowerShell 5.1 中文工具在发布包中可按构建规则使用 BOM，但不能把该规则套到 Hook 或修改现有官方 Hook 的字节。
 
-在含 code30 生产解析器的源码树上校验实际包：
+在当前源码的生产解析器上校验实际包：
 
 ~~~powershell
 ./plugins/test-plugin.ps1 -PackageFile 'work/my-launcher-plugin-1.0.0.owo' -JdkHome 'C:/path/to/jdk' -JsonJar 'C:/path/to/json-20240303.jar' -BuildRoot 'work/my-launcher-check-v1'

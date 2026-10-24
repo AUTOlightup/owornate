@@ -1,6 +1,6 @@
 # 本地插件快速上手
 
-请把下面这些命令放在 `1.0.1-rc22 / code31` 的完整管理器源码包根目录运行。源码包包含 `new-plugin.ps1`、打包/校验工具、shell-v1 与 launcher-v1 示例测试、插件专用更新清单工具。Windows 安装包用于管理器部署、基础环境准备和插件导入，开发工具请使用完整源码包。Windows 包另附 `plugins/examples/launcher-keep-awake/launcher-keep-awake-1.0.1.owo`，可手动导入体验第三方示例；Setup 不会自动部署它。协议细节见同级的 [shell-v1 插件开发](PLUGIN-DEVELOPMENT.md)、[Launcher 插件](LAUNCHER-PLUGINS.md) 和 [插件升级与更新协议](UPDATES.md)。
+请把下面这些命令放在 `1.0.1-rc23 / code32` 候选的完整管理器源码包根目录运行。rc23 本地构建已通过，只调整 A.92 安装来源授权页的回退；插件协议和三个官方包版本不变。源码包包含 `new-plugin.ps1`、打包/校验工具、shell-v1 与 launcher-v1 示例测试、插件专用更新清单工具。Windows 安装包用于管理器部署、基础环境准备和插件导入，开发工具请使用完整源码包。Windows 包另附 `plugins/examples/launcher-keep-awake/launcher-keep-awake-1.0.1.owo`，可手动导入体验第三方示例；Setup 不会自动部署它。协议细节见同级的 [shell-v1 插件开发](PLUGIN-DEVELOPMENT.md)、[Launcher 插件](LAUNCHER-PLUGINS.md) 和 [插件升级与更新协议](UPDATES.md)。
 
 本页从现有的 `plugins/examples/screen-timeout` 复制一个真实可运行的 shell-v1 插件，再修改成自己的实现。模板会读写 Android 的 `system.screen_off_timeout`：启用时写入清单选择的毫秒值，停用时在系统值仍由本插件持有时恢复首次启用前的值。换成别的功能时，需要同时修改 `plugin.sh` 与 `plugin.json`，并保证 `status`、启用、停用和卸载的现有生命周期仍然成立。
 
@@ -49,7 +49,7 @@ new-plugin.ps1 默认仍创建 shell-v1。显式传入 -Runtime launcher-v1 会�
 ./plugins/test-plugin.ps1 -PackageFile 'work/my-launcher-plugin-1.0.0.owo' -JdkHome $JdkHome -JsonJar $JsonJar -BuildRoot 'work/launcher-check-v1'
 ~~~
 
-第三方 launcher-v1 包只接受 plugin.json、hook.js 两个文件；额外文件、目录和 theme.jar 均拒绝。只有官方 dev.owornate.monet 可以带 theme.jar。导入只保存包，部署到自有 version 4 运行环境并通过原 Launcher 重载后才生效；shared WatchHide 环境不能同时部署新的第三方 Hook。code30/31 已在 A.92 实机完成第三方导入升级、启停、卸载重装、示例效果、初始化错误恢复及 v4 重启恢复；共享环境下仅移除导入包也已验证，原共享运行组件保持不变。完整范围见发布包中的 `docs/VALIDATION.md`。
+第三方 launcher-v1 包只接受 plugin.json、hook.js 两个文件；额外文件、目录和 theme.jar 均拒绝。只有官方 dev.owornate.monet 可以带 theme.jar。导入只保存包，部署到自有 version 4 运行环境并通过原 Launcher 重载后才生效；shared WatchHide 环境不能同时部署新的第三方 Hook。code30/31 已在 A.92 实机完成第三方导入升级、启停、卸载重装、示例效果、初始化错误恢复及 v4 重启恢复；共享环境下仅移除导入包也已验证。上述结果属于 rc22/code31 历史证据，code32 不改变插件协议，也未新增插件功能验收。完整范围见发布包中的 `docs/VALIDATION.md`。
 
 本轮的窄例子与工具测试：
 

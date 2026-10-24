@@ -1,6 +1,7 @@
 package dev.codex.watchworkshop;
 
 import android.content.Intent;
+import android.content.ActivityNotFoundException;
 import android.content.pm.PackageInfo;
 import android.net.Uri;
 import android.os.Bundle;
@@ -124,8 +125,15 @@ public final class UpdateActivity extends WatchActivity {
             UpdateApkProvider.validate(this, UpdateApkProvider.apk(this));
             if (!getPackageManager().canRequestPackageInstalls()) {
                 status = "请允许 OWOrnate 安装更新，返回后再次点击确认安装。";
-                startActivityForResult(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + getPackageName())), ALLOW_INSTALL);
+                Uri packageUri = Uri.parse("package:" + getPackageName());
+                try {
+                    startActivityForResult(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            packageUri), ALLOW_INSTALL);
+                } catch (ActivityNotFoundException | SecurityException unavailable) {
+                    status = "请在应用信息中开启“允许来自此来源的应用”，返回后再次确认安装。";
+                    startActivityForResult(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            packageUri), ALLOW_INSTALL);
+                }
                 render(); return;
             }
             Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE)

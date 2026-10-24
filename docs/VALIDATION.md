@@ -1,8 +1,30 @@
-# OWOrnate 1.0.1-rc22 / versionCode 31 · 验证记录
+# OWOrnate 1.0.1-rc23 / versionCode 32 · 验证记录
 
-## code31 候选与实机补充验收
+## code32 本地候选：安装来源授权页回退（构建通过，自动回退待实机验收）
 
-2026-10-24，code31 修复 AdbClient 丢弃无行尾换行 JSON 的问题。6 项真实解码回归通过；完整构建、原证书、非调试和许可资产检查通过，14 个 APK assets 与 code30 逐字节一致。候选 APK 为 341,073 bytes，SHA-256 `a8f52477c9284750cacdf25496e88eebf54f2efbc4043b09883c4e161ba1c790`。
+2026-10-24 的 A.92 设备检查确认：普通应用直接启动 `MANAGE_UNKNOWN_APP_SOURCES` 时，系统组件 `Settings$ManageAppExternalSourcesActivity` 未导出，无法正常打开。标准 `ACTION_APPLICATION_DETAILS_SETTINGS` 实际可进入 `SingleAppManagerActivity`，其中可见“允许来自此来源的应用”开关。
+
+主代理已在 `UpdateActivity` 增加窄回退：只在启动授权页遇到 `ActivityNotFoundException` 或 `SecurityException` 时打开标准应用信息页，并显示明确操作说明。其他异常仍按原错误路径处理。用户必须手动开启开关，返回后再次确认安装，并由系统安装器完成最终确认；应用不会自动授予权限或静默安装。
+
+code30 → code31 的公开更新主链已在设备上成功：GitHub API 可发现更新，但 `github.com` 附件直连超时；经已有 PC 代理，应用成功发现并下载 code31，包名、版本、签名和 SHA-256 校验均通过。直接授权入口被系统拒绝后，用户手动进入标准应用信息页开启“允许来自此来源的应用”，返回管理器确认安装，再由 `HeytapPackageInstallerActivity` 点击安装；安装后当前 APK 摘要确认升级到 code31。
+
+rc23 / code32 本地构建已通过：APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable 与许可资产检查通过，14 个 APK assets 与 code31 相同。候选尚待发布；新增自动回退尚未在新一轮 UI 流程中触发，因此不能标为实机通过。三个官方包版本和 code31 运行载荷作为历史回归基线沿用。
+
+| 验证 | 当前结果 | 范围 |
+| --- | --- | --- |
+| A.92 直接授权入口 | 受阻 | `ManageAppExternalSourcesActivity` 未导出，普通应用不能正常启动 |
+| 标准应用信息页手动路径 | 通过 | `APPLICATION_DETAILS_SETTINGS` 可进入 `SingleAppManagerActivity`，用户手动开启来源开关 |
+| code32 自动回退 | 待验收 | 本地代码已有窄回退；尚未在设备上由 code32 自动触发 |
+| 手动权限与系统安装 | 通过 | 返回管理器确认安装，`HeytapPackageInstallerActivity` 安装；当前摘要确认为 code31 |
+| 应用发现与下载 code31 | 通过，经已有 PC 代理 | 管理器内发现并下载；包名、版本、签名和 SHA-256 校验通过 |
+| rc23 构建与载荷身份 | 通过 | 原证书、非 debug、许可通过；14 assets 与 code31 相同 |
+| rc23 发布与安装后状态 | 待完成 | 尚未上传；不把 code31 安装结果替代 code32 新回退验收 |
+
+# 历史：OWOrnate 1.0.1-rc22 / versionCode 31 · 验证记录
+
+## 历史：code31 候选与实机补充验收（已公开发布）
+
+2026-10-24，code31 修复 AdbClient 丢弃无行尾换行 JSON 的问题。6 项真实解码回归通过；完整构建、原证书、非调试和许可资产检查通过，14 个 APK assets 与 code30 逐字节一致。该版本 APK 为 341,073 bytes，SHA-256 `a8f52477c9284750cacdf25496e88eebf54f2efbc4043b09883c4e161ba1c790`，已于 [v1.0.1-rc22](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc22) 公开。
 
 | 验证 | 结果 | 范围 |
 | --- | --- | --- |
@@ -12,11 +34,11 @@
 | v4 真实重启 | 通过 | 首次打开管理器前取得新 bootId 对应 `bootReady=true`、运行状态及启停掩码 |
 | 共享环境限制 | 通过 | 第三方显示未部署、开关禁用；共享组件不被替换 |
 | 共享环境卸载模块界面 | 通过 | 信任导入测试包 → 限制页开关禁用 → 卸载模块 → 确认 → 返回三个官方列表 |
-| 测试后恢复 | 通过 | 原插件仓库、共享组件与 ADB keys 字节、Launcher 偏好、测试时 PID 4140、bootId、主题和 capture idle 不变；恢复原偏好与 10 秒熄屏，删除测试下载，最终休眠 |
+| 测试后恢复 | 通过 | 原插件仓库、共享组件与 ADB keys 字节、Launcher 偏好、当次 PID、bootId、主题和 capture idle 不变；恢复原偏好与 10 秒熄屏，删除测试下载，最终休眠 |
 
-共享环境卸载检查没有安装、重载或重启。code30 已验证的 v3→v4 迁移、第三方升级、无 trace 常亮效果及其他本机检查沿用有效证据；code31 全部运行 assets 未改。code31 APK 沿用原证书，发布候选直接复用该字节，不重新构建或签名。
+共享环境卸载检查没有安装、重载或重启。code30 已验证的 v3→v4 迁移、第三方升级、无 trace 常亮效果及其他本机检查沿用有效证据；code31 全部运行 assets 未改。rc22 发布时 `main` 与 tag 指向 `8fed5d49e5de04a61f08163b06428965c9874ae1`，九个附件已完成匿名公网下载及 SHA-256 核对。
 
-未覆盖旧 v2 真实迁移、其他硬件/固件、本版实际录制、QQ 送达、长期功耗及公网下载到系统安装器。本文不声称已上传 Release。
+code31 / rc22 未覆盖旧 v2 真实迁移、其他硬件/固件、该版实际录制、QQ 送达和长期功耗。rc22 的九附件已公开；后续设备阶段在应用内成功下载 code31 并通过包校验，手动开启系统应用信息页来源开关后，由管理器确认并交给系统安装器完成覆盖，安装后摘要确认为 code31。
 
 # 历史：OWOrnate 1.0.1-rc21 / versionCode 30 · 验证记录
 

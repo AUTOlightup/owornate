@@ -1,14 +1,21 @@
 # 版本记录
 
-## 1.0.1-rc22 / versionCode 31 — 第三方插件、v4生命周期与ADB错误详情（发布候选，未上传）
+## 1.0.1-rc23 / versionCode 32 — A.92 安装来源授权回退（本地构建通过，待发布）
+
+- A.92 上普通应用直接启动 `MANAGE_UNKNOWN_APP_SOURCES` 会遇到 `Settings$ManageAppExternalSourcesActivity not exported`。`UpdateActivity` 现在仅在 `ActivityNotFoundException` 或 `SecurityException` 时回退标准 `ACTION_APPLICATION_DETAILS_SETTINGS` 应用信息页，并显示明确说明。
+- 回退页实际为 `SingleAppManagerActivity`，用户可手动打开“允许来自此来源的应用”。返回管理器后仍须再次确认安装并由系统安装器完成；不自动授予权限，不静默安装。
+- 当前设备以临时 code30 作为升级起点。应用经已有 PC 代理发现并下载 code31，包名、版本、签名和 SHA-256 校验通过；用户手动进入系统应用信息页开启来源开关，返回管理器确认安装，再由 `HeytapPackageInstallerActivity` 完成覆盖，安装后摘要确认 code31。
+- rc23 / code32 本地构建通过：341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable、许可资产通过，14 assets 与 code31 相同。代码中的自动回退尚待新一轮实机触发，三个官方插件包版本不变。
+
+## 1.0.1-rc22 / versionCode 31 — 第三方插件、v4生命周期与ADB错误详情（已公开发布）
 
 - 修复 AdbClient 对无行尾换行输出的截断；插件初始化错误现在显示插件 ID 与具体异常，退出码和传输行为保持原契约。
 - launcher-v1 从 code30 起接受第三方 ID 与仅含 `plugin.json`、`hook.js` 的两文件包。第三方与三个官方插件共用导入、管理页、右上开关和错误展示；没有原生 Activity、服务或设置页 SDK。
 - 自有运行环境使用 version 4，保留已知 version 3 的部署载荷和启停选择迁移；共享 WatchHide 环境仍不部署第三方 Hook。
 - 真实 AdbClient 6 项回归、完整构建、原证书、非调试及许可资产检查通过；全部 14 个 APK assets 与 code30 相同。
 - code31 实机完成第三方重装、初始化错误显示、停用/卸载恢复、真实重启，以及共享环境受限展示和卸载模块界面；测试后原环境与数据恢复。
-- 候选 APK 为 341,073 bytes，SHA-256 `a8f52477c9284750cacdf25496e88eebf54f2efbc4043b09883c4e161ba1c790`。本轮未上传 Release，不能把候选材料当作在线可用版本。
-- 未覆盖旧 v2 真实迁移、其他硬件/固件、本版实际录制、QQ 送达、长期功耗及公网下载到系统安装器。
+- APK 为 341,073 bytes，SHA-256 `a8f52477c9284750cacdf25496e88eebf54f2efbc4043b09883c4e161ba1c790`。已以 [v1.0.1-rc22](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc22) 公开，发布时 `main` 与 tag 指向 `8fed5d49e5de04a61f08163b06428965c9874ae1`，九个附件完成匿名公网下载和摘要核对。
+- 未覆盖旧 v2 真实迁移、其他硬件/固件、该版实际录制、QQ 送达和长期功耗。后续实验在应用中下载 code31 并通过包校验，手动开启系统来源开关后完成系统安装器覆盖；该成功路径不能替代 code32 自动回退的新一轮验收。
 
 ## 1.0.1-rc21 / versionCode 30 — 第三方 Launcher 插件接入（历史：本机阶段）
 

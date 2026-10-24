@@ -1,16 +1,36 @@
-# OWOrnate 1.0.1-rc22 / versionCode 31 · 当前验收范围
+# OWOrnate 1.0.1-rc23 / versionCode 32 · 当前验收范围
 
-## code31 / 1.0.1-rc22：预发布版本
+## code32 / 1.0.1-rc23：本地构建通过，自动回退待授权验收
 
-2026-10-24，code31 修复 AdbClient 丢弃无行尾换行 JSON 的问题。真实解码 6 项回归通过；完整构建、原证书、非调试与许可资产检查通过，14 个 APK assets 与 code30 逐字节一致。候选 APK 为 341,073 bytes，SHA-256 `a8f52477c9284750cacdf25496e88eebf54f2efbc4043b09883c4e161ba1c790`。
+code32 针对 A.92 的安装来源授权入口修复：普通应用直接启动 `MANAGE_UNKNOWN_APP_SOURCES` 时被 `Settings$ManageAppExternalSourcesActivity not exported` 阻止。`UpdateActivity` 仅在 `ActivityNotFoundException` 或 `SecurityException` 时回退到 `ACTION_APPLICATION_DETAILS_SETTINGS`，显示明确操作文案；用户仍须在 `SingleAppManagerActivity` 中手动打开“允许来自此来源的应用”，返回管理器后仍须确认系统安装器。不得自动授予权限或自动确认安装。
+
+code30 → code31 主链已完成：GitHub API 可发现更新，但 `github.com` 附件直连超时。经已有 PC 代理，应用成功发现并下载 code31，包名、版本、签名和 SHA-256 校验通过。用户手动进入标准应用信息页开启“允许来自此来源的应用”，返回管理器确认安装，再由 `HeytapPackageInstallerActivity` 点击安装；安装后 APK 摘要确认当前为 code31。
+
+rc23 / code32 本地构建已通过：341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable、许可资产通过，14 assets 与 code31 相同。候选尚待发布；code32 的自动回退尚未在新一轮实机中触发，三个官方插件包版本不变，code31 的运行载荷、第三方插件、v4 环境及既有本机证据作为历史回归基线沿用。
+
+| 检查项 | 当前结论 | 说明 |
+| --- | --- | --- |
+| 直接 `MANAGE_UNKNOWN_APP_SOURCES` | 受阻 | A.92 系统 Activity 未导出 |
+| 标准应用信息页手动路径 | 通过 | 可进入单应用管理页，用户手动开启来源开关 |
+| code32 自动回退 | 待验收 | 本地回退代码尚未在该版本设备流程中触发 |
+| 用户手动授权 | 通过 | 开关已开启 |
+| 系统安装器确认与覆盖 | 通过（code31） | `HeytapPackageInstallerActivity` 安装，当前摘要确认 code31 |
+| rc23 构建与载荷身份 | 通过 | 原证书、非 debug、许可通过；14 assets 与 code31 相同 |
+| rc23 发布、自动回退与安装后状态 | 待完成 | 不能以 code31 安装结果替代 code32 新回退验收 |
+
+# 历史：OWOrnate 1.0.1-rc22 / versionCode 31 · 验收范围
+
+## 历史：code31 / 1.0.1-rc22：已公开发布
+
+2026-10-24，code31 修复 AdbClient 丢弃无行尾换行 JSON 的问题。真实解码 6 项回归通过；完整构建、原证书、非调试与许可资产检查通过，14 个 APK assets 与 code30 逐字节一致。该版本 APK 为 341,073 bytes，SHA-256 `a8f52477c9284750cacdf25496e88eebf54f2efbc4043b09883c4e161ba1c790`。
 
 原无线表实际完成第三方插件卸载后重新信任导入并重装就绪、初始化错误按插件 ID 显示且保留包、开关停用与卸载恢复、v4 真实重启。重启后首次打开管理器前取得当前 bootId 对应的 `bootReady=true`、实际 Launcher PID/映射、单 supervisor 及启停掩码。电脑保留 ADB 取证连接，不据此声称物理断开。
 
-共享环境界面移除随后通过：真实信任导入测试包后，限制页将第三方开关置为禁用；点击卸载模块并确认后回到三个官方插件列表。原插件仓库、共享组件与 ADB keys 字节、Launcher 偏好、测试时 Launcher PID 4140、bootId、主题和 capture idle 状态均保持不变；PID 只作为该次证据，不代表当前进程。测试恢复本轮新备份偏好与原 10 秒熄屏，删除测试下载并最终休眠；该轮未安装、重载或重启。
+共享环境界面移除随后通过：真实信任导入测试包后，限制页将第三方开关置为禁用；点击卸载模块并确认后回到三个官方插件列表。原插件仓库、共享组件与 ADB keys 字节、Launcher 偏好、当次 Launcher PID、bootId、主题和 capture idle 状态均保持不变；PID 只作为该次证据，不代表当前进程。测试恢复本轮新备份偏好与原 10 秒熄屏，删除测试下载并最终休眠；该轮未安装、重载或重启。
 
 code30 已验证的 v3→v4 迁移、第三方升级、无 trace 常亮效果和其他本机检查继续有效；code31 运行 assets 未改。共享 WatchHide 环境只保留导入包，不部署第三方 Hook。第三方 Hook 是用户明确信任的进程内代码，没有沙箱隔离。
 
-未覆盖旧 v2 真实迁移、其他硬件/固件、本版实际录制、QQ 送达、长期功耗及公网下载到系统安装器。发布准备和候选 APK 不构成上传、线上可用或这些边界的验收。下方为历史记录，旧“待实机”不代表当前状态。
+rc22 已于 2026-10-24 公开发布，发布时 `main` 与 tag 指向 `8fed5d49e5de04a61f08163b06428965c9874ae1`，九个附件已完成匿名公网下载和 SHA-256 核对。后续 code30 → code31 应用内下载、手动系统授权、系统安装器覆盖和安装后摘要确认均已完成。code31 未覆盖旧 v2 真实迁移、其他硬件/固件、该版实际录制、QQ 送达和长期功耗。下方为历史记录，旧“待实机”不代表当前状态。
 
 # 历史：OWOrnate 1.0.1-rc21 / versionCode 30 · 验收范围
 

@@ -1,6 +1,6 @@
 # OWOrnate
 
-**1.0.1-rc22 / code31**，下载与完整附件见 [GitHub 预发布](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc22)。 code31 修复 ADB 输出缺少行尾换行时被截断的问题，插件初始化错误现在显示插件 ID 与具体异常。第三方 `launcher-v1` 可使用自己的 safeID，与官方插件共用导入、管理页、右上开关和错误展示；自有运行环境为 v4，保留已知 v3 迁移。共享 WatchHide 环境只保留导入包，不部署第三方 Hook。详见 [Launcher 插件](docs/LAUNCHER-PLUGINS.md)与 [验证记录](docs/VALIDATION.md)。
+**1.0.1-rc23 / code32**，下载与完整附件见 [GitHub 预发布](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc23)。 本版针对 A.92 上普通应用无法启动 `MANAGE_UNKNOWN_APP_SOURCES` 设置页的问题：仅在启动遇到 `ActivityNotFoundException` 或 `SecurityException` 时回退到标准应用信息页，并用明确文案提示用户打开“允许来自此来源的应用”。授权仍由用户在系统界面手动完成，返回管理器后仍须再次确认系统安装器操作；管理器不会自动授予权限或静默安装。第三方 `launcher-v1`、v4 自有运行环境和三个官方插件包版本沿用 code31，见 [Launcher 插件](docs/LAUNCHER-PLUGINS.md)与 [验证记录](docs/VALIDATION.md)。
 
 OWOrnate（`dev.codex.watchworkshop`）是面向 OPPO Watch 2 的原生 Android 插件管理器，提供统一管理页、右上开关和 `.owo` 导入。莫奈取色、负一屏小组件、截屏与录屏分别提供 launcher-v1 插件包；其他高级权限功能可使用 shell-v1 自行开发。
 
@@ -36,23 +36,25 @@ Windows 包内的 `payload/plugins/` 带有三个官方 `.owo`，但 **Setup 不
 
 <img src="docs/screenshots/record-quick-code18.png" width="201" alt="历史录屏快捷页参考" />
 
-上图是 code18 的历史界面参考，不是 code31 验收截图。
+上图是 code18 的历史界面参考，不是 code32 验收截图。
 
 ## 更新
 
-管理器可从“设置 → 管理器更新”检查 GitHub，插件从管理页“检查插件更新”检查。rc22 候选的更新清单包含管理器 31、莫奈 1.1.0、小组件 1.0.0 和捕获 1.1.0；对应清单和附件在上述预发布页提供。
+管理器可从“设置 → 管理器更新”检查 GitHub，插件从管理页“检查插件更新”检查。公开的 rc22 更新清单包含管理器 31、莫奈 1.1.0、小组件 1.0.0 和捕获 1.1.0；rc23 候选已构建但尚未上传，不能把当前本地源文件当作在线可用版本。
 
-清单公开后，下载内容会核对 ID、版本、大小和 SHA-256。APK 还必须匹配原包名、严格更高 versionCode 和原签名，之后才交给系统安装器确认。插件进入同 ID 升级预览；launcher-v1 升级只替换导入包，部署由用户另行确认。真实公网附件下载到系统安装器的完整覆盖仍未实机验收，`adb install -r` 不能替代该结果。
+清单公开后，下载内容会核对 ID、版本、大小和 SHA-256。APK 还必须匹配原包名、严格更高 versionCode 和原签名，之后才交给系统安装器确认。若 A.92 拒绝直接打开安装来源授权页，code32 只回退到系统应用信息页；用户须手动开启其中的“允许来自此来源的应用”开关，再返回管理器确认安装。插件进入同 ID 升级预览；launcher-v1 升级只替换导入包，部署由用户另行确认。
 
 ## 验证范围
 
-code31 已在测试用 OPPO Watch 2 / OW20W1 / A.92 / API27 / root 上完成同签安装、第三方卸载后重新信任导入并重装、初始化错误按 ID 显示、停用与卸载恢复，以及 v4 真实重启。重启后首次打开管理器前确认当前 bootId 对应的 `bootReady`、Launcher PID/映射、单 supervisor 和启停掩码。
+历史 code31 已在测试用 OPPO Watch 2 / OW20W1 / A.92 / API27 / root 上完成同签安装、第三方卸载后重新信任导入并重装、初始化错误按 ID 显示、停用与卸载恢复，以及 v4 真实重启。重启后首次打开管理器前确认当前 bootId 对应的 `bootReady`、Launcher PID/映射、单 supervisor 和启停掩码。
 
 共享环境随后完成真实信任导入、限制页禁用第三方开关、卸载模块确认及返回三个官方列表。原插件仓库、共享组件与 ADB keys 字节、Launcher 偏好、PID、bootId、主题和 capture idle 状态保持不变。测试恢复原偏好与 10 秒熄屏、删除测试下载并最终休眠；这几项界面检查没有安装、重载或重启。
 
-code30 已验证的 v3→v4 迁移、第三方升级、无 trace 常亮效果和其他本机检查继续有效；code31 的 14 个 APK assets 与 code30 相同，APK 为 341,073 bytes，SHA-256 `a8f52477c9284750cacdf25496e88eebf54f2efbc4043b09883c4e161ba1c790`。发布流程直接复用该原证书 APK，不重新构建或签名。
+code30 已验证的 v3→v4 迁移、第三方升级、无 trace 常亮效果和其他本机检查继续有效。code31 / rc22 已于 2026-10-24 公开发布，九附件经匿名公网下载和摘要核对；发布时 `main` 与 tag 指向提交 `8fed5d49e5de04a61f08163b06428965c9874ae1`。rc23 / code32 管理器 APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable、许可资产检查通过，14 个 APK assets 与 code31 相同。
 
-**未覆盖：** 旧 v2 真实迁移、其他硬件/固件、本版实际录制、QQ 送达、长期功耗，以及公网下载到系统安装器。上述结果仍待相应环境验证。详见 [验证记录](docs/VALIDATION.md) 与 [验收范围](docs/ACCEPTANCE.md)。
+当前 A.92 已完成 code30 → code31 的应用内下载与系统安装主链：GitHub API 可发现更新，但直连 `github.com` 附件下载超时，经已有 PC 代理由应用发现并下载 code31，包名、版本、签名和 SHA-256 校验通过；直接安装来源授权 Activity 被系统拒绝后，手动进入标准应用信息页开启“允许来自此来源的应用”，返回管理器确认安装，再由 `HeytapPackageInstallerActivity` 点击安装，最终确认已安装 APK 为 code31。该成功路径需要手动绕到系统应用信息页；code32 的自动回退尚未在新一轮实机中触发，不能记为自动回退验收通过。
+
+**未覆盖：** rc23 / code32 的自动回退与安装后状态、旧 v2 真实迁移、其他硬件/固件、本版实际录制、QQ 送达及长期功耗。rc22/code31 的代理下载、手动系统授权和系统安装器覆盖已有通过证据；rc23 尚未发布。详见 [验证记录](docs/VALIDATION.md) 与 [验收范围](docs/ACCEPTANCE.md)。
 
 ## 隐私与源码
 
