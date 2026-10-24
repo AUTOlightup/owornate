@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "runtime": "launcher-v1",
+  "permissions": [
+    "root"
+  ],
+  "device": {
+    "model": "OW20W1",
+    "firmware": "OW20W1_11_A.92",
+    "sdk": 27,
+    "abi": "armeabi-v7a"
+  },
+  "id": "dev.owornate.widgets",
+  "name": "负一屏小组件",
+  "description": "原生 AppWidget 宿主及隐藏小布入口。卡片设置与数据保留在管理器内。",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "settings": []
+}

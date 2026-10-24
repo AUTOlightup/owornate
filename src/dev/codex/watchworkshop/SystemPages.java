@@ -48,46 +48,30 @@ final class SystemPages {
 
     /** 后台准备本机密钥（第一次要生成，约几秒），排在莫奈的第一次读取前面。 */
     void prepareKeys() {
-        MonetPages.IO.execute(() -> {
-            try {
-                RootShell.prime(a);
-            } catch (Exception e) {
-                a.runOnUiThread(() -> {
-                    probeError = "本机密钥准备失败";
-                    a.render();
-                });
-            }
+        a.inBackground(DeviceQueues.GENERAL, () -> {
+            RootShell.prime(a);
+            return null;
+        }, (unused, problem) -> {
+            if (problem == null) return;
+            probeError = "本机密钥准备失败";
+            a.render();
         });
     }
 
-    String title(String page) {
-        switch (page) {
-            case "settings": return "设置";
-            case "check": return "运行环境";
-            case "guide": return "首次设置";
-            case "technical": return "技术详情";
-            case "licenses": return "开源许可";
-            default: return null;
-        }
-    }
-
-    boolean render(String page) {
-        switch (page) {
-            case "welcome": welcome(); return true;
-            case "settings": settings(); return true;
-            case "check": check(); return true;
-            case "guide": guide(); return true;
-            case "technical": technical(); return true;
-            case "licenses": licenses(); return true;
-            default: return false;
-        }
+    void registerPages(PageRegistry pages) {
+        pages.add(PageIds.WELCOME, "OWOrnate", this::welcome);
+        pages.add(PageIds.SETTINGS, "设置", this::settings);
+        pages.add(PageIds.CHECK, "运行环境", this::check);
+        pages.add(PageIds.GUIDE, "首次设置", this::guide);
+        pages.add(PageIds.TECHNICAL, "技术详情", this::technical);
+        pages.add(PageIds.LICENSES, "开源许可", this::licenses);
     }
 
     private void welcome() {
         a.ui.hero("spark", "让优化，留在腕上", "分类安装 · 随时管理", "");
         a.ui.button("开始检查", true, () -> {
             a.prefs.edit().putBoolean("welcomed", true).apply();
-            a.go("check");
+            a.go(PageIds.CHECK);
             probe();
         });
         a.ui.button("先逛逛", false, () -> {
@@ -99,10 +83,12 @@ final class SystemPages {
     /** 设置：运行环境和说明类入口在上，版本信息在下。 */
     private void settings() {
         WorkshopUi ui = a.ui;
-        ui.row("运行环境", "授权、组件和模块接入状态", "shield", () -> a.go("check"));
-        ui.row("首次设置", "安装与恢复说明", "book", () -> a.go("guide"));
-        ui.row("技术详情", "授权与组件信息", "info", () -> a.go("technical"));
-        ui.row("开源许可", "Material Color Utilities 与 Frida", "file", () -> a.go("licenses"));
+        ui.row("运行环境", "授权、组件和模块接入状态", "shield", () -> a.go(PageIds.CHECK));
+        ui.row("首次设置", "安装与恢复说明", "book", () -> a.go(PageIds.GUIDE));
+        ui.row("技术详情", "授权与组件信息", "info", () -> a.go(PageIds.TECHNICAL));
+        ui.row("开源许可", "Material Color Utilities 与 Frida", "file", () -> a.go(PageIds.LICENSES));
+        ui.row("管理器更新", "检查 GitHub 发布版本", "info", () ->
+                a.startActivity(new android.content.Intent(a, UpdateActivity.class)));
         ui.title("关于 OWOrnate");
         ui.value("版本", appVersion(a));
         ui.value("包名", a.getPackageName());
@@ -114,22 +100,15 @@ final class SystemPages {
         probing = true;
         probeError = "";
         a.render();
-        MonetPages.IO.execute(() -> {
-            try {
-                JSONObject r = RuntimeProbe.read(a);
-                if (!a.prefs.edit().putString("probe", r.toString()).commit()) throw new IOException("检测结果保存失败");
-                a.runOnUiThread(() -> {
-                    snapshot = r;
-                    probing = false;
-                    if (!a.destroyed()) a.render();
-                });
-            } catch (Exception e) {
-                a.runOnUiThread(() -> {
-                    probing = false;
-                    probeError = WatchActivity.message(e);
-                    if (!a.destroyed()) a.render();
-                });
-            }
+        a.inBackground(DeviceQueues.GENERAL, () -> {
+            JSONObject result = RuntimeProbe.read(a);
+            if (!a.prefs.edit().putString("probe", result.toString()).commit()) throw new IOException("检测结果保存失败");
+            return result;
+        }, (result, problem) -> {
+            probing = false;
+            if (problem == null) snapshot = result;
+            else probeError = WatchActivity.message(problem);
+            a.render();
         });
     }
 
@@ -143,47 +122,84 @@ final class SystemPages {
         if (repairing || a.working()) return;
         repairing = true;
         a.render();
-        MonetPages.IO.execute(() -> {
+        a.inBackground(DeviceQueues.GENERAL, () -> {
             RuntimeSupport.ensure(a.getApplicationContext(), false);
-            a.runOnUiThread(() -> {
-                repairing = false;
-                if (!a.destroyed()) recheck();
-            });
+            return null;
+        }, (unused, problem) -> {
+            repairing = false;
+            recheck();
         });
     }
 
     private void check() {
         WorkshopUi ui = a.ui;
         MonetPages monet = a.monet;
-        boolean reading = probing || monet.refreshing() || a.widgets.refreshing() || a.capture.refreshing();
+        boolean reading = probing || a.anyRefreshing();
+        boolean probeFailed = !probeError.isEmpty();
+        boolean moduleFailed = a.anyReadFailed();
         if (reading) {
             ui.hero("scan", "正在检查", "读取设备、授权和模块状态。", "");
-        } else if (!probeError.isEmpty() || monet.failed() || a.widgets.failed() || a.capture.failed()) {
-            ui.hero("key", "状态读取未完成", "检查本机连接或授权后重新读取。", "warning");
-            if (!probeError.isEmpty()) ui.note(probeError);
-            if (monet.failed()) ui.note(monet.error());
-            if (a.widgets.failed()) ui.note("小组件：" + a.widgets.error());
-            if (a.capture.failed()) ui.note("截屏与录屏：" + a.capture.error());
-            ui.row("首次设置", "查看部署步骤", "book", () -> a.go("guide"));
-        } else if (monet.known()) {
-            String kind = monet.statusText();
-            boolean ready = monet.confirmedAt() > 0 && (monet.installed() || monet.available());
-            ui.hero(ready ? "shield" : "key", ready ? "管理器已就绪" : "需要检查环境", kind, ready ? "success" : "warning");
+        } else if (probeFailed || moduleFailed) {
+            ui.hero("key", "状态读取未完成", "设备检查与功能状态分别显示在下方。", "warning");
+            if (probeFailed) {
+                ui.note("设备检查或授权失败：" + probeError, "warning");
+                ui.row("首次设置", "查看部署步骤", "book", () -> a.go(PageIds.GUIDE));
+            }
+            if (moduleFailed) {
+                ui.note("功能状态读取失败。已确认的旧值仍保留，不影响其他功能。");
+                a.readErrorNotes("warning");
+            }
+        } else if (needsSetup()) {
+            ui.hero("key", "需要首次部署", "完成管理器首次部署后，可在手表分别安装功能。", "warning");
+            ui.row("首次设置", "查看部署步骤", "book", () -> a.go(PageIds.GUIDE));
+        } else if (managerReady()) {
+            int count = installedCount();
+            String detail = count == 0
+                    ? "运行环境已就绪 · 三项功能可按任意顺序安装"
+                    : count + " 项功能已纳入管理";
+            ui.hero("shield", "管理器已就绪", detail, "success");
             ui.value("莫奈确认时间", time(monet.confirmedAt()));
-            if (ready) ui.button("进入 OWOrnate", true, a::returnHome);
-            else if (monet.needsSetup()) ui.row("首次设置", "查看部署步骤", "book", () -> a.go("guide"));
+            ui.button("发现优化", true, () -> a.go(PageIds.DISCOVER));
+            ui.button("返回首页", false, a::returnHome);
+        } else if (incompatible()) {
+            ui.hero("warning", "运行组件需要检查", "现有文件不兼容或来源无法确认。", "warning");
+            ui.note("可重新读取状态；若仍失败，请用电脑检查首次部署与运行组件版本。");
+        } else if (monet.known()) {
+            ui.hero("key", "状态待确认", monet.statusText(), "warning");
+            ui.value("莫奈确认时间", time(monet.confirmedAt()));
         } else {
             ui.note("尚未执行检查。");
         }
         if (!reading) {
             device();
             ui.button("重新检查", false, !repairing && !a.working(), this::recheck);
-            if (monet.independent()) {
+            if (monet.ownRuntime()) {
                 ui.button(repairing ? "正在恢复启动…" : "恢复独立组件启动", false,
                         !repairing && !a.working(), this::repairRuntime);
                 ui.note(RuntimeSupport.lastResult(a));
             }
         }
+    }
+
+    private int installedCount() {
+        int count = 0;
+        if (a.monet.installed()) count++;
+        if (a.widgets.installed()) count++;
+        if (a.capture.installed()) count++;
+        return count;
+    }
+
+    private boolean managerReady() {
+        return a.monet.confirmedAt() > 0 && a.monet.known() && a.widgets.confirmed()
+                && a.capture.confirmed() && !needsSetup() && !incompatible();
+    }
+
+    private boolean needsSetup() {
+        return a.monet.needsSetup() || a.widgets.needsSetup() || a.capture.needsSetup();
+    }
+
+    private boolean incompatible() {
+        return a.monet.incompatible() || a.widgets.incompatible() || a.capture.incompatible();
     }
 
     private void device() {
@@ -204,11 +220,11 @@ final class SystemPages {
     private void guide() {
         WorkshopUi ui = a.ui;
         ui.hero("book", "只需部署一次", "之后在手表上安装和管理优化。", "");
-        ui.text("1. 在已 root 的手表上，使用电脑完成管理器首次部署。\n2. 回到 OWOrnate，在“发现优化”中打开莫奈取色。\n3. 查看安装方案，点“安装并启用”。");
-        ui.note("首次部署入口：Windows 包内的 00-Setup.cmd。完成后，莫奈安装无需电脑或联网。");
-        ui.text("已安装的功能直接列在首页，点进去即可配置；莫奈的启停在配置页右上开关，卸载在“更多选项”里。");
+        ui.text("1. 在已 root 的手表上，使用电脑完成管理器首次部署。\n2. 回到 OWOrnate，打开“发现优化”。\n3. 莫奈取色、负一屏小组件、截屏与录屏可按任意顺序安装。");
+        ui.note("首次部署入口：Windows 包内的 00-Setup.cmd。完成后，安装功能无需电脑或联网。");
+        ui.text("每个功能独立显示安装、启用、停用和更新状态；共享运行组件不能单独卸载，可停用其中的功能。");
         ui.button("重新检查", true, () -> {
-            a.go("check");
+            a.go(PageIds.CHECK);
             recheck();
         });
     }
@@ -227,12 +243,15 @@ final class SystemPages {
         ui.value("启动记录", RuntimeSupport.lastResult(a));
         SharedPreferences r = a.getSharedPreferences("runtime", 0);
         ui.value("系统启动记录", r.getString("bootId", "").isEmpty() ? "尚无本包独立启动记录"
-                : r.getBoolean("bootOk", false) ? "上次启动已确认 · 当前启动请用电脑验证" : "上次启动未确认");
+                : r.getBoolean("bootReady", false) ? "上次启动功能已就绪 · 当前启动请用电脑验证" : "上次启动的功能就绪未确认");
     }
 
     private void licenses() {
         WorkshopUi ui = a.ui;
-        for (String file : new String[]{"material-color-utilities.txt", "frida-core.txt", "frida-core-library.txt", "frida-gum.txt"}) {
+        String[] licenseFiles = {
+            "material-color-utilities.txt", "frida-core.txt", "frida-core-library.txt", "frida-gum.txt"
+        };
+        for (String file : licenseFiles) {
             ui.title(file);
             try (InputStream in = a.getAssets().open("licenses/" + file)) {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();

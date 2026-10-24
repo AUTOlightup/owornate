@@ -26,6 +26,8 @@ public final class OWOrnateWidgetSnapshotTest {
                 OWOrnateWidgetSnapshotTest::unconfirmedInstalledKindLeaksNothing);
         run("已停用(installed)：不显示旧主题",
                 OWOrnateWidgetSnapshotTest::stoppedShowsNoPreviousTheme);
+        run("已停用(disabled)与新版本(update)：仍识别为已安装",
+                OWOrnateWidgetSnapshotTest::disabledAndUpdateRemainInstalled);
         run("已启用(installed, original+corners=false)：仍 active 且保留主题",
                 OWOrnateWidgetSnapshotTest::enabledKeepsOriginalTheme);
         run("已启用(shared)：与 installed 同等并保留主题",
@@ -106,6 +108,23 @@ public final class OWOrnateWidgetSnapshotTest {
         eq("状态文案为已停用", "莫奈 · 已停用", snapshot.statusText());
         eq("主题文案引导管理页", "打开 OWOrnate 管理", snapshot.themeText());
         ok("主题文案不含旧主题标签", !snapshot.themeText().contains(previous.modeLabel()));
+    }
+
+    private static void disabledAndUpdateRemainInstalled() {
+        ThemeConfig previous = theme("auto", 0x00445566, true);
+        OWOrnateWidgetSnapshot disabled =
+                new OWOrnateWidgetSnapshot("disabled", true, false, previous, 4243L);
+        ok("disabled 视为已安装", disabled.installed());
+        eq("disabled 状态文案", "莫奈 · 已停用", disabled.statusText());
+        eq("disabled 主题文案", "打开 OWOrnate 管理", disabled.themeText());
+        ok("disabled 不保留旧主题", disabled.theme == null);
+
+        OWOrnateWidgetSnapshot update =
+                new OWOrnateWidgetSnapshot("update", false, false, previous, 4244L);
+        ok("update 视为已安装", update.installed());
+        eq("update 状态文案", "莫奈 · 可更新", update.statusText());
+        eq("update 主题文案", "打开组件读取状态", update.themeText());
+        ok("update 不保留旧主题", update.theme == null);
     }
 
     // ------------------------------------------------------------------
@@ -210,6 +229,10 @@ public final class OWOrnateWidgetSnapshotTest {
                 new OWOrnateWidgetSnapshot("installed", true, false, null, 0L).installed());
         ok("shared 判定为真",
                 new OWOrnateWidgetSnapshot("shared", true, false, null, 0L).installed());
+        ok("disabled 判定为真",
+                new OWOrnateWidgetSnapshot("disabled", true, false, null, 0L).installed());
+        ok("update 判定为真",
+                new OWOrnateWidgetSnapshot("update", false, false, null, 0L).installed());
         ok("available 判定为假",
                 !new OWOrnateWidgetSnapshot("available", true, false, null, 0L).installed());
         ok("setup 判定为假",

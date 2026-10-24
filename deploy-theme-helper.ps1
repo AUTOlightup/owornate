@@ -31,7 +31,7 @@
     待部署的本机 jar，默认 <脚本目录>\runtime-helper\dist\WatchTheme-helper-v6.jar。
 
 .PARAMETER ExpectedHookSha
-    现有综合 Hook 的 SHA256 基线；默认接受已知 v9/v10/v11/v12，显式传参时严格匹配。
+    现有综合 Hook 的 SHA256 基线；默认接受已知 v9/v10/v11/v12/v13，显式传参时严格匹配。
 
 .PARAMETER OldThemeSha
     设备原有 helper v5 的 SHA256，允许作为部署前状态。
@@ -169,7 +169,11 @@ if (-not $PSBoundParameters.ContainsKey('ExpectedHookSha') -and
     $hookSha -in @(
         '0a5654f86c5fa2570d74f9877ff9abe974dcb82ba71c66869b4607f09182c07d',
         '9b8116a64219e919e0f76777f9bbefb4f42821e651a337d109a21a3a457823f1',
-        '4bc93055211b1c070155b45808955b6e41380c51edc63010ba8f0f759c508ac0'
+        '4bc93055211b1c070155b45808955b6e41380c51edc63010ba8f0f759c508ac0',
+        'd0d3406f1ce940f20f2089b2962c41d5eb0830249cd781887f37fecc90c088d7',
+        'aff84e9105a66738234398db5e5beef4fd67b384a804308479cfda472ef349a1',
+        'fdbf56b324eb29fd37f9d92644b051194503024ea34fcca4b1ddcdd9ecb3d46a',
+        '46b4ae970215c889e36524c3969b66e45bba45100afd973daae07947f531ea19'
     )) {
     $ExpectedHookSha = $hookSha
 }

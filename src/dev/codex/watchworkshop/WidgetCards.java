@@ -61,8 +61,7 @@ final class WidgetCards {
             try {
                 CountdownModel.Frame frame = CountdownWidgetProvider.shown(context, source,
                         CountdownStore.config(context), System.currentTimeMillis()).frame;
-                String state = frame.empty() ? frame.emptyMain
-                        : (frame.title + " · " + (frame.prefix + " " + frame.value + frame.unit).trim());
+                String state = frame.empty() ? frame.emptyMain : frame.title + " · " + frame.countText();
                 return "纪念日 · " + state + " · " + added;
             } catch (RuntimeException failure) {
                 return "纪念日 · " + added;
@@ -73,9 +72,9 @@ final class WidgetCards {
         String title = CountdownModel.title(config.title);
         String state;
         try {
-            CountdownModel.Frame frame = CountdownModel.frame(config, System.currentTimeMillis(), ZoneId.systemDefault());
-            state = frame.chronometer ? frame.detail + " 到点"
-                    : (frame.prefix + " " + frame.value + frame.unit).trim();
+            CountdownModel.Frame frame =
+                    CountdownModel.frame(config, System.currentTimeMillis(), ZoneId.systemDefault());
+            state = frame.chronometer ? frame.detail + " 到点" : frame.countText();
         } catch (RuntimeException failure) {
             state = config.target;
         }

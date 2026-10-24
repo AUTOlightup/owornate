@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "runtime": "launcher-v1",
+  "permissions": [
+    "root"
+  ],
+  "device": {
+    "model": "OW20W1",
+    "firmware": "OW20W1_11_A.92",
+    "sdk": 27,
+    "abi": "armeabi-v7a"
+  },
+  "id": "dev.owornate.capture",
+  "name": "截屏与录屏",
+  "description": "控制中心采集入口和录屏提示。复用管理器内原生采集服务。",
+  "versionName": "1.1.0",
+  "versionCode": 2,
+  "settings": [],
+  "nativeSettings": [
+    {
+      "key": "bitrate",
+      "title": "录屏画质",
+      "type": "choice",
+      "default": "1200000",
+      "options": [
+        { "value": "600000", "label": "低" },
+        { "value": "1200000", "label": "标准" },
+        { "value": "2400000", "label": "高" }
+      ]
+    }
+  ]
+}

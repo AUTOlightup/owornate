@@ -165,6 +165,11 @@ public final class CountdownModel {
         public boolean unitVisible() {
             return !unit.isEmpty();
         }
+
+        /** 一行读数：“还有 234天”“就是 今天”；计时器状态只有前缀。 */
+        public String countText() {
+            return (prefix + " " + value + unit).trim();
+        }
     }
 
     /** 算出这一刻该显示什么。nowMillis 用系统墙钟，watchZone 是手表当前时区。 */

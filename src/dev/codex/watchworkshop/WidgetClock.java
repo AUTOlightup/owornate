@@ -2,22 +2,35 @@ package dev.codex.watchworkshop;
 
 import android.app.AlarmManager;
 import android.app.PendingIntent;
-import android.content.*;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
 
-/** One alarm for the next actual date/class boundary across all cards. No repeating timer. */
+/** 所有卡片共用一个闹钟：只排在下一个真实的日期或换课边界上，没有周期轮询。 */
 public final class WidgetClock extends BroadcastReceiver {
-    private static final String ACTION="dev.codex.watchworkshop.WIDGET_BOUNDARY";
-    @Override public void onReceive(Context c,Intent intent){
-        CountdownWidgetProvider.updateAll(c);TimetableWidgetProvider.updateAll(c);schedule(c);
+    private static final String ACTION = "dev.codex.watchworkshop.WIDGET_BOUNDARY";
+    private static final int REQUEST = 8201;
+
+    @Override public void onReceive(Context context, Intent intent) {
+        CountdownWidgetProvider.updateAll(context);
+        TimetableWidgetProvider.updateAll(context);
+        schedule(context);
         // 纪念日模式：换日后的第一次边界顺带读一次，漏掉的改动最晚在这里补上；课表的换课边界不读。
-        AnniversarySync.daily(c);
+        AnniversarySync.daily(context);
     }
-    static synchronized void schedule(Context c){
-        long now=System.currentTimeMillis(),next=Math.min(CountdownWidgetProvider.nextUpdate(c,now),TimetableWidgetProvider.nextUpdate(c,now));
-        PendingIntent pending=PendingIntent.getBroadcast(c,8201,new Intent(c,WidgetClock.class).setAction(ACTION),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        AlarmManager alarms=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
+
+    static synchronized void schedule(Context context) {
+        long now = System.currentTimeMillis();
+        long next = Math.min(CountdownWidgetProvider.nextUpdate(context, now),
+                TimetableWidgetProvider.nextUpdate(context, now));
+        PendingIntent pending = PendingIntent.getBroadcast(context, REQUEST,
+                new Intent(context, WidgetClock.class).setAction(ACTION),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         alarms.cancel(pending);
         // 这台表对第三方唤醒闹钟会降级或拒绝，用普通闹钟；息屏期间到点的，亮屏后补送。
-        if(next!=Long.MAX_VALUE)alarms.setExactAndAllowWhileIdle(AlarmManager.RTC,Math.max(now+1000,next),pending);
+        if (next != Long.MAX_VALUE) {
+            alarms.setExactAndAllowWhileIdle(AlarmManager.RTC, Math.max(now + 1000, next), pending);
+        }
     }
 }

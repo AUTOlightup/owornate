@@ -8,11 +8,20 @@ import android.app.Application;
  * 倒计时在纪念日模式时，顺带登记亮屏检查并读一次纪念日。
  */
 public final class WorkshopApp extends Application {
-    @Override public void onCreate(){
+    @Override public void onCreate() {
         super.onCreate();
-        try{CountdownWidgetProvider.updateAll(this);}catch(RuntimeException ignored){}
-        try{TimetableWidgetProvider.updateAll(this);}catch(RuntimeException ignored){}
-        try{WidgetClock.schedule(this);}catch(RuntimeException ignored){}
-        try{AnniversarySync.start(this);}catch(RuntimeException ignored){}
+        bestEffort(() -> CountdownWidgetProvider.updateAll(this));
+        bestEffort(() -> TimetableWidgetProvider.updateAll(this));
+        bestEffort(() -> WidgetClock.schedule(this));
+        bestEffort(() -> AnniversarySync.start(this));
+    }
+
+    /** 某一步失败不能影响其余步骤，也不能让进程启动失败。 */
+    private static void bestEffort(Runnable step) {
+        try {
+            step.run();
+        } catch (RuntimeException ignored) {
+            // 下次进程启动或下一个边界闹钟会再试。
+        }
     }
 }

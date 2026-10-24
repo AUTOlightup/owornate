@@ -1,28 +1,34 @@
 package dev.codex.watchworkshop;
 
+import android.content.Context;
 import android.content.Intent;
-import android.os.SystemClock;
 import android.provider.Settings;
+import dev.codex.watchworkshop.ModuleManagement.Action;
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.EnumSet;
 
 /**
  * 负一屏小组件：接入状态、介绍页、接入方案和管理页。
  *
  * <p>状态只投影 {@link RuntimeStateStore}；check/install/repair 由 {@link WidgetHostManager}
  * 在后台写入共享缓存。读取错误、操作错误和成功提示分开保存，操作失败不会显示成读取失败。
+ * 设备操作都排在 {@link DeviceQueues#WIDGETS} 上。
  */
-final class WidgetPages {
-    private static final ExecutorService IO = Executors.newSingleThreadExecutor();
-
+final class WidgetPages implements ModuleStatusView, ModuleManagement {
     private final MainActivity a;
     private String host = "";
     private String keep = "";
+    private String owner = "";
     private String readError = "";
     private String operationError = "";
     private String notice = "";
-    private boolean refreshing, installing, repairing, breenoBusy;
+    private boolean refreshing;
+    private boolean installing;
+    private boolean repairing;
+    private boolean breenoBusy;
+    private boolean openingEditor;
+    private boolean changing;
+    private final ModuleManagementUi managementUi = new ModuleManagementUi();
     private StatusObservation<WidgetHostManager.Status> observation;
 
     WidgetPages(MainActivity activity) {
@@ -31,98 +37,143 @@ final class WidgetPages {
     }
 
     boolean on() { return host.equals("installed") || host.equals("ready"); }
-    boolean known() { return !host.isEmpty(); }
-    /** Legacy widgetHost migrations have confirmedAt=0 and must not count as a confirmed availability. */
-    boolean available() {
-        return host.equals("available") && confirmed()
-                && (observation.error == null || observation.error.isEmpty()) && !failed();
+    /** installed 指功能文件已存在；enabled 才代表功能开关已打开。 */
+    @Override public boolean installed() {
+        return on() || host.equals("disabled") || host.equals("update");
     }
-    boolean failed() { return !readError.isEmpty(); }
-    String error() { return readError; }
-    boolean refreshing() { return refreshing; }
+    @Override public boolean known() { return !host.isEmpty(); }
+    /** 旧版 widgetHost 迁移来的值 confirmedAt=0，不能算作已确认可接入。 */
+    @Override public boolean available() {
+        return host.equals("available") && confirmed() && observation.error.isEmpty() && !failed();
+    }
+    @Override public boolean failed() { return !readError.isEmpty(); }
+    boolean needsSetup() { return host.equals("setup") && !failed(); }
+    boolean incompatible() { return host.equals("conflict") && !failed(); }
+    @Override public String error() { return readError; }
+    @Override public boolean refreshing() { return refreshing; }
     /** 安装、后台修复和小布写入共用一条设备连接，避免并行写共享 Hook。 */
-    boolean busy() { return installing || repairing || breenoBusy; }
-    boolean blocksBack(String page) { return page.equals("wplan") && installing; }
+    boolean busy() { return installing || repairing || breenoBusy || changing || openingEditor; }
+    boolean removable() { return installed() && owner.equals("own"); }
+    boolean blocksBack(String page) { return page.equals(PageIds.WIDGET_PLAN) && installing; }
 
-    private boolean confirmed() { return observation != null && observation.confirmedAt > 0; }
+    boolean confirmed() { return observation != null && observation.confirmedAt > 0; }
 
     /** 读取共享缓存并更新本页投影；MainActivity 的监听器也调用这里。 */
     void sync() {
-        StatusObservation<WidgetHostManager.Status> seen = RuntimeStateStore.widgets(a);
-        observation = seen;
-        if (seen == null) return;
-        if (seen.value != null) {
-            host = seen.value.host;
-            keep = seen.value.keep;
-        } else {
-            host = "";
-            keep = "";
-        }
-        readError = seen.error == null ? "" : seen.error;
+        observation = RuntimeStateStore.widgets(a);
+        host = observation.value == null ? "" : observation.value.host;
+        keep = observation.value == null ? "" : observation.value.keep;
+        owner = observation.value == null ? "" : observation.value.owner;
+        readError = observation.error;
     }
 
-    String statusText() {
+    @Override public String statusText() {
         if (failed()) return on() ? "上次已接入 · 本次读取失败" : readError;
         if (refreshing && host.isEmpty()) return "正在读取…";
         if (host.isEmpty()) return "状态待确认";
-        if (!confirmed()) {
-            return "上次：" + (on() ? (host.equals("ready") ? "已接入" : "已接入（加载未确认）") : "未接入");
-        }
-        if (on()) return host.equals("ready") ? "已接入" : "已接入（表盘加载未确认）";
+        if (!confirmed()) return "上次：" + shortState();
+        if (on()) return shortState();
+        if (host.equals("disabled")) return "已安装 · 已停用";
+        if (host.equals("update")) return "已安装 · 可更新";
         if (host.equals("available")) return "未接入";
+        if (host.equals("setup")) return "首次使用需要部署管理器";
+        if (host.equals("conflict")) return "已有运行组件不兼容";
         return "状态待确认";
     }
 
-    String discoverLine() {
+    private String shortState() {
+        if (host.equals("ready")) return owner.equals("shared") ? "已接入 · 共享组件" : "已接入";
+        if (host.equals("installed")) return "已接入（表盘加载未确认）";
+        if (host.equals("disabled")) return "已安装 · 已停用";
+        if (host.equals("update")) return "已安装 · 可更新";
+        if (host.equals("setup")) return "首次使用需要部署管理器";
+        if (host.equals("conflict")) return "已有运行组件不兼容";
+        return "未接入";
+    }
+
+    @Override public String discoverLine() {
         if (failed()) return statusText();
-        if (on()) return "已接入 · 信息、倒计时与课表";
+        if (installed()) return statusText();
         if (available()) return "可接入 · 信息、倒计时与课表";
         return statusText();
     }
 
-    void homeRow() {
+    @Override public String homeLine() {
         int cards = WidgetCards.totalCount(a);
-        a.ui.row("负一屏小组件", failed() ? statusText() : cards == 0 ? "已接入 · 尚未添加卡片" : "负一屏上 " + cards + " 张卡片", "layers", () -> a.go("widgets"));
+        if (failed() || !on()) return statusText();
+        return cards == 0 ? "已接入 · 尚未添加卡片" : "负一屏上 " + cards + " 张卡片";
     }
 
-    String title(String page) {
-        switch (page) {
-            case "wdetail": case "widgets": return "负一屏小组件";
-            case "wplan": return on() ? "重新接入" : "接入方案";
-            default: return null;
+    @Override public boolean showOnHome() {
+        return installed() || failed() || host.equals("setup") || host.equals("conflict");
+    }
+
+    void registerPages(PageRegistry pages) {
+        pages.add(PageIds.WIDGET_DETAIL, "负一屏小组件", this::detail);
+        pages.add(PageIds.WIDGET_PLAN, () -> on() ? "重新接入" : "接入方案", this::plan);
+        pages.addManaged(PageIds.WIDGETS, this, this::manage);
+    }
+
+    @Override public String moduleTitle() { return "负一屏小组件"; }
+
+    @Override public ModuleManagement.State managementState() {
+        EnumSet<Action> actions = EnumSet.of(Action.REFRESH);
+        Boolean enabled = on() ? Boolean.TRUE : host.equals("disabled") || host.equals("available")
+                ? Boolean.FALSE : null;
+        String limitation = "";
+        if (available() && (owner.equals("own") || owner.equals("shared"))) actions.add(Action.INSTALL);
+        if (installed()) {
+            if (owner.equals("own")) {
+                actions.add(Action.UNINSTALL);
+                if (host.equals("update")) actions.add(Action.UPDATE);
+                else {
+                    actions.add(Action.ENABLE);
+                    actions.add(Action.DISABLE);
+                    actions.add(Action.RECONNECT);
+                }
+            } else if (owner.equals("shared")) {
+                actions.add(Action.RECONNECT);
+                limitation = "共享运行组件没有小组件独立开关，不能单独启停或卸载；卡片配置保留。";
+            } else limitation = "运行组件来源尚未确认，请重新读取状态。";
+        } else if (host.equals("setup")) limitation = "请先完成管理器首次部署。";
+        else if (host.equals("conflict")) limitation = "已有运行组件不兼容，请检查运行环境。";
+        String status = failed() ? known() ? "上次：" + shortState() : "状态待确认" : statusText();
+        return new ModuleManagement.State(installed(), enabled, confirmed(),
+                a.working() || refreshing, status, readError, operationError, notice,
+                limitation, actions);
+    }
+
+    @Override public String uninstallMessage() {
+        return "只移除小组件功能，保留管理器、莫奈和录屏及卡片配置；表盘会重新加载一次。";
+    }
+
+    @Override public void executeManagement(Action action) {
+        switch (action) {
+            case REFRESH: refresh(true); break;
+            case INSTALL:
+            case RECONNECT: a.go(PageIds.WIDGET_PLAN); break;
+            case ENABLE: setWidgetEnabled(true); break;
+            case DISABLE: setWidgetEnabled(false); break;
+            case UPDATE: update(); break;
+            case UNINSTALL: uninstall(); break;
+            default: break;
         }
     }
 
-    boolean render(String page) {
-        switch (page) {
-            case "wdetail": detail(); return true;
-            case "wplan": plan(); return true;
-            case "widgets": manage(); return true;
-            default: return false;
-        }
+    /** 页面能直接展示的错误说明：已知的 IOException 带着中文原因，其余用 fallback。 */
+    private static String describe(Exception e, String fallback) {
+        return e instanceof IOException && e.getMessage() != null ? e.getMessage() : fallback;
     }
 
-    private static String errorOf(Exception e) {
-        return e instanceof IOException && e.getMessage() != null ? e.getMessage() : "读取失败，请检查管理器首次授权";
+    private String operationErrorOf(Exception e) {
+        return describe(e, "操作未完成，请重试");
     }
 
-    private static String operationErrorOf(Exception e) {
-        return e instanceof IOException && e.getMessage() != null ? e.getMessage() : "操作未完成，请重试";
-    }
-
-    /** 开机时刻（毫秒）：判断“白名单刚加入、还没重启”时用。 */
-    private static long bootTime() {
-        return System.currentTimeMillis() - SystemClock.elapsedRealtime();
-    }
-
+    /** 写操作开始：先同步共享缓存，并清掉上一次操作的提示。 */
     private void beginOperation() {
         sync();
         operationError = "";
         notice = "";
-    }
-
-    private void setOperationError(String message) {
-        operationError = message == null ? "" : message;
     }
 
     /** 只读状态：先同步共享缓存，再按 observation.fresh 决定是否探测。 */
@@ -130,25 +181,15 @@ final class WidgetPages {
         if (a.destroyed()) return;
         sync();
         if (a.working() || refreshing) return;
-        StatusObservation<WidgetHostManager.Status> seen = observation;
-        if (!force && seen != null && seen.fresh(System.currentTimeMillis(), MainActivity.FRESH_MS)) return;
+        if (!force && observation.fresh(System.currentTimeMillis(), MainActivity.FRESH_MS)) return;
         refreshing = true;
         a.render();
-        IO.execute(() -> {
-            String problem = "";
-            try {
-                WidgetHostManager.check(a.getApplicationContext());
-            } catch (Exception e) {
-                problem = errorOf(e);
-            }
-            final String message = problem;
-            a.runOnUiThread(() -> {
-                if (a.destroyed()) return;
-                refreshing = false;
-                sync();
-                if (readError.isEmpty() && !message.isEmpty()) readError = message;
-                a.render();
-            });
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.WIDGETS, () -> WidgetHostManager.check(app), (status, problem) -> {
+            refreshing = false;
+            sync();
+            if (problem != null && readError.isEmpty()) readError = describe(problem, "读取失败，请检查管理器首次授权");
+            a.render();
         });
     }
 
@@ -162,31 +203,18 @@ final class WidgetPages {
     /** 接入或重新接入：会重新加载表盘一次，期间不能返回，也不能做其他写操作。 */
     private void install() {
         if (a.destroyed() || a.working()) return;
+        if (!managementState().can(installed() ? Action.RECONNECT : Action.INSTALL)) return;
         beginOperation();
         installing = true;
         a.render();
-        IO.execute(() -> {
-            boolean success = false;
-            String problem = "";
-            try {
-                WidgetHostManager.install(a.getApplicationContext());
-                success = true;
-            } catch (Exception e) {
-                problem = operationErrorOf(e);
-            }
-            final boolean ok = success;
-            final String message = problem;
-            a.runOnUiThread(() -> {
-                if (a.destroyed()) return;
-                installing = false;
-                sync();
-                if (ok) {
-                    notice = installNotice(host, keep);
-                } else {
-                    setOperationError(message);
-                }
-                a.leave("wplan");
-            });
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.WIDGETS, () -> WidgetHostManager.install(app), (status, problem) -> {
+            installing = false;
+            sync();
+            if (problem == null) notice = installNotice(host, keep);
+            else operationError = operationErrorOf(problem);
+            a.leave(PageIds.WIDGET_PLAN);
+            a.returnAfterLauncherReload();
         });
     }
 
@@ -196,37 +224,81 @@ final class WidgetPages {
         beginOperation();
         repairing = true;
         a.render();
-        IO.execute(() -> {
-            boolean success = false;
-            String problem = "";
-            try {
-                WidgetHostManager.repairBackground(a.getApplicationContext());
-                success = true;
-            } catch (Exception e) {
-                problem = operationErrorOf(e);
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.WIDGETS, () -> WidgetHostManager.repairBackground(app), (status, problem) -> {
+            repairing = false;
+            sync();
+            if (problem == null) {
+                notice = keep.equals("added") ? "后台保活已加入白名单，重启一次手表后生效。" : "后台保活已开启。";
+            } else {
+                operationError = operationErrorOf(problem);
             }
-            final boolean ok = success;
-            final String message = problem;
-            a.runOnUiThread(() -> {
-                if (a.destroyed()) return;
-                repairing = false;
-                sync();
-                if (ok) {
-                    notice = keep.equals("added")
-                            ? "后台保活已加入白名单，重启一次手表后生效。"
-                            : "后台保活已开启。";
-                } else {
-                    setOperationError(message);
-                }
-                a.render();
-            });
+            a.render();
         });
+    }
+
+    /** 独立运行组件才提供该功能的开关；共享 v13 的小组件没有独立门控。 */
+    private void setWidgetEnabled(boolean enabled) {
+        if (a.destroyed() || a.working() || !removable()) return;
+        if (!managementState().can(enabled ? Action.ENABLE : Action.DISABLE)) return;
+        beginOperation();
+        changing = true;
+        a.render();
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.WIDGETS, () -> WidgetHostManager.setEnabled(app, enabled),
+                (status, problem) -> {
+                    changing = false;
+                    sync();
+                    if (problem == null) notice = enabled ? "小组件功能已启用。" : "小组件功能已停用，卡片配置保留。";
+                    else operationError = operationErrorOf(problem);
+                    a.render();
+                    a.returnAfterLauncherReload();
+                });
+    }
+
+    private void update() {
+        if (a.destroyed() || a.working()) return;
+        if (!managementState().can(Action.UPDATE)) return;
+        beginOperation();
+        changing = true;
+        a.render();
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.WIDGETS, () -> WidgetHostManager.update(app),
+                (status, problem) -> {
+                    changing = false;
+                    sync();
+                    if (problem == null) notice = "小组件运行组件已更新，原有启停状态已保留。";
+                    else operationError = operationErrorOf(problem);
+                    a.render();
+                    a.returnAfterLauncherReload();
+                });
+    }
+
+    private void uninstall() {
+        if (a.destroyed() || a.working() || !removable()) return;
+        if (!managementState().can(Action.UNINSTALL)) return;
+        beginOperation();
+        changing = true;
+        a.render();
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.WIDGETS, () -> WidgetHostManager.uninstall(app),
+                (status, problem) -> {
+                    changing = false;
+                    sync();
+                    if (problem == null) notice = "小组件功能已卸载，已添加的卡片设置数据保留。";
+                    else operationError = operationErrorOf(problem);
+                    a.render();
+                    a.returnAfterLauncherReload();
+                });
     }
 
     /** 小布助手当前是否隐藏：读系统设置，无需 root，随时可读。 */
     private boolean breenoHidden() {
-        try { return Settings.System.getInt(a.getContentResolver(), "codex_qc_hide_breeno", 0) == 1; }
-        catch (Exception e) { return false; }
+        try {
+            return Settings.System.getInt(a.getContentResolver(), "codex_qc_hide_breeno", 0) == 1;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** 切换隐藏小布助手：写系统设置要 root，走后台；hook 下次打开负一屏时读取生效，不重载表盘。 */
@@ -235,39 +307,64 @@ final class WidgetPages {
         beginOperation();
         breenoBusy = true;
         a.render();
-        IO.execute(() -> {
-            String problem = "";
-            try {
-                WidgetHostManager.breeno(a.getApplicationContext(), hide);
-            } catch (Exception e) {
-                problem = operationErrorOf(e);
-            }
-            final String message = problem;
-            a.runOnUiThread(() -> {
-                if (a.destroyed()) return;
-                breenoBusy = false;
-                sync();
-                if (!message.isEmpty()) setOperationError(message);
-                a.render();
-            });
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.WIDGETS, () -> {
+            WidgetHostManager.breeno(app, hide);
+            return null;
+        }, (unused, problem) -> {
+            breenoBusy = false;
+            sync();
+            if (problem != null) operationError = operationErrorOf(problem);
+            a.render();
         });
+    }
+
+    /** 读取失败的说明与重试按钮；介绍页和管理页共用。 */
+    private void readFailure(boolean primaryRetry) {
+        a.ui.note((on() ? "上次已接入 · 本次读取失败：" : "读取状态失败：") + readError, "warning");
+        a.ui.button("重新读取状态", primaryRetry, !refreshing, () -> refresh(true));
+    }
+
+    private void openEditor() {
+        if (a.destroyed() || a.working()) return;
+        beginOperation();
+        openingEditor = true;
+        a.render();
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.WIDGETS, () -> {
+            WidgetHostManager.openEditor(app);
+            return null;
+        }, (unused, problem) -> {
+            openingEditor = false;
+            if (problem != null) operationError = operationErrorOf(problem);
+            a.render();
+        });
+    }
+
+    /** 本次操作的结果提示；介绍页和管理页共用。 */
+    private void operationNotes() {
+        if (!notice.isEmpty()) a.ui.note(notice, "success");
+        if (!operationError.isEmpty()) a.ui.note(operationError, "warning");
     }
 
     private void detail() {
         WorkshopUi ui = a.ui;
         ui.hero("layers", "负一屏小组件", "信息、倒计时和课表，直接放在负一屏", "");
-        if (!notice.isEmpty()) ui.note(notice, "success");
-        if (!operationError.isEmpty()) ui.note(operationError, "warning");
-        if (failed()) {
-            ui.note((on() ? "上次已接入 · 本次读取失败：" : "读取状态失败：") + readError, "warning");
-            ui.button("重新读取状态", !on(), !refreshing, () -> refresh(true));
-        }
-        if (on()) {
-            if (!failed()) ui.note(statusText(), confirmed() ? "success" : "warning");
-            ui.button("打开小组件", true, () -> a.go("widgets"));
+        operationNotes();
+        if (failed()) readFailure(!installed());
+        if (installed()) {
+            if (!failed()) ui.note(statusText(), on() ? "success" : "warning");
+            ui.button("打开小组件", true, () -> a.go(PageIds.WIDGETS));
         } else if (available()) {
             ui.note("适配当前手表 · 可接入", "success");
-            ui.button("接入负一屏", true, !a.working(), () -> a.go("wplan"));
+            ui.button("接入负一屏", true, managementState().can(Action.INSTALL), () -> request(Action.INSTALL));
+        } else if (host.equals("setup")) {
+            ui.note("完成一次首次部署后，可在这里接入小组件。", "warning");
+            ui.row("首次设置", "查看部署步骤", "book", () -> a.go(PageIds.GUIDE));
+        } else if (host.equals("conflict")) {
+            ui.note("现有运行组件不兼容，请先检查环境。", "warning");
+            ui.row("运行环境", "授权、版本与恢复", "shield", () -> a.go(PageIds.CHECK));
+            ui.button("重新读取状态", false, !a.working(), () -> refresh(true));
         } else if (!failed() && operationError.isEmpty()) {
             ui.note("正在读取接入状态…");
         }
@@ -281,47 +378,31 @@ final class WidgetPages {
 
     private void plan() {
         WorkshopUi ui = a.ui;
-        boolean again = on();
+        boolean again = installed();
         ui.hero("layers", again ? "重新接入" : "接入负一屏", "让原生负一屏能添加 OWOrnate 的卡片", "");
-        ui.value("本次操作", again ? "不替换文件，重新加载表盘；白名单缺失时一并修复"
-                : "换成放行 OWOrnate 卡片的组件文件，原文件已备份，然后重新加载表盘；白名单缺失时一并修复");
+        if (owner.equals("shared")) {
+            ui.value("本次操作", "检查现有共享 v13，必要时替换并在替换前保留原 Hook 备份；然后重新加载表盘");
+        } else if (again) {
+            ui.value("本次操作", "检查本包独立运行组件，启用小组件并重新加载表盘；保留现有设置");
+        } else {
+            ui.value("本次操作", "准备本包独立运行组件，先保存为停用再启用小组件；保留现有设置");
+        }
+        if (on() && (keep.equals("missing") || keep.equals("unavailable"))) {
+            ui.value("后台更新", "白名单缺失时一并修复");
+        }
         ui.value("不会改动", "应用数据、莫奈取色、QQ 和输入法词库");
-        ui.note("表盘会重新加载一次，屏幕可能短暂黑屏，约 10 秒。", "warning");
+        ui.note("表盘会重新加载一次，屏幕可能短暂黑屏。", "warning");
         if (installing) ui.note("正在接入，请稍候，不要退出…");
-        ui.button(again ? "重新接入" : "接入并重新加载表盘", true, !a.working(), this::install);
+        ui.button(again ? "重新接入" : "接入并重新加载表盘", true,
+                managementState().can(again ? Action.RECONNECT : Action.INSTALL), this::install);
         ui.button("暂不接入", false, !busy(), a::onBackPressed);
     }
 
     private void manage() {
         WorkshopUi ui = a.ui;
-        if (!notice.isEmpty()) ui.note(notice, "success");
-        if (!operationError.isEmpty()) ui.note(operationError, "warning");
-        if (failed()) {
-            ui.note((on() ? "上次已接入 · 本次读取失败：" : "读取状态失败：") + readError, "warning");
-            ui.button("重新读取状态", false, !refreshing, () -> refresh(true));
-        } else if (host.equals("available")) {
-            if (available()) {
-                ui.note("尚未接入负一屏", "warning");
-                ui.button("去接入", true, !a.working(), () -> a.go("wplan"));
-            } else {
-                ui.note("正在确认接入状态…");
-            }
-        } else if (host.equals("installed")) {
-            ui.note("已接入 · 表盘加载状态未确认。负一屏里找不到卡片时，可在页底重新接入。");
-        } else if (host.isEmpty()) {
-            ui.note("正在读取接入状态…");
-        }
-        if (on() && (keep.equals("missing") || keep.equals("unavailable"))) {
-            ui.note(keep.equals("missing")
-                    ? "后台更新白名单未加入，息屏后卡片可能停止更新。"
-                    : "无法确认后台更新白名单，请检查系统权限后重试。", "warning");
-            ui.button("修复后台更新", true, !a.working(), this::repairBackground);
-            if (repairing) ui.note("正在修复后台更新…");
-        }
-        long keepBoot = a.prefs.getLong("widgetKeepBoot", 0);
-        if (keepBoot != 0 && Math.abs(bootTime() - keepBoot) < 60000) {
-            ui.note("已加入系统后台白名单。重启一次手表后，卡片在息屏后也会自动更新。", "warning");
-        }
+        ModuleManagementUi.status(ui, this);
+        hostNotes();
+        backgroundNotes();
         ui.row("OWOrnate 信息", WidgetCards.infoSummary(a), "info",
                 () -> a.startActivity(new Intent(a, OWOrnateWidgetSettingsActivity.class)));
         ui.row("倒计时", WidgetCards.countdownSummary(a), "clock",
@@ -330,15 +411,48 @@ final class WidgetPages {
                 () -> a.startActivity(new Intent(a, TimetableSettingsActivity.class)));
         ui.title("添加或移除卡片");
         ui.note("在负一屏的编辑页添加或移除卡片，点卡片本身可以再次设置。每类卡片只有一份设置，同类卡片共用。");
-        if (on()) {
-            ui.title("负一屏外观");
-            boolean hidden = breenoHidden();
-            ui.toggle("隐藏小布助手", hidden ? "负一屏不再显示小布那一行" : "负一屏顶部保留小布那一行",
-                    hidden, () -> setBreeno(!breenoHidden()));
-            if (breenoBusy) ui.note("正在应用，下次打开负一屏生效…");
-            else ui.note("隐藏后，下面的卡片会顶上来；需要小布时随时可以打开。");
+        ui.button(openingEditor ? "正在打开…" : "打开系统卡片编辑页", false,
+                on() && !a.working() && !failed(), this::openEditor);
+        if (on()) breenoSection();
+        managementUi.actions(ui, this, a::render);
+    }
+
+    /** 管理页顶部：读取失败、尚未接入或加载未确认时的说明。 */
+    private void hostNotes() {
+        WorkshopUi ui = a.ui;
+        if (host.equals("installed")) {
+            ui.note("已接入 · 表盘加载状态未确认。负一屏里找不到卡片时，可在页底重新接入。");
+        } else if (host.equals("update")) {
+            ui.note("现有小组件运行文件需要更新。更新会保留功能启停状态。", "warning");
+        } else if (host.equals("setup")) {
+            ui.row("首次设置", "查看部署步骤", "book", () -> a.go(PageIds.GUIDE));
+        } else if (host.equals("conflict")) {
+            ui.row("运行环境", "授权、版本与恢复", "shield", () -> a.go(PageIds.CHECK));
         }
-        if (on()) ui.row("重新接入", "负一屏找不到卡片时使用", "refresh", () -> a.go("wplan"));
+    }
+
+    /** 后台更新白名单：缺失时给出修复入口；刚加入时提示重启一次。 */
+    private void backgroundNotes() {
+        WorkshopUi ui = a.ui;
+        if (on() && (keep.equals("missing") || keep.equals("unavailable"))) {
+            ui.note(keep.equals("missing")
+                    ? "后台更新白名单未加入，息屏后卡片可能停止更新。"
+                    : "无法确认后台更新白名单，请检查系统权限后重试。", "warning");
+            ui.button("修复后台更新", true, !a.working(), this::repairBackground);
+            if (repairing) ui.note("正在修复后台更新…");
+        }
+        if (WidgetHostManager.keepPendingReboot(a)) {
+            ui.note("已加入系统后台白名单。重启一次手表后，卡片在息屏后也会自动更新。", "warning");
+        }
+    }
+
+    private void breenoSection() {
+        WorkshopUi ui = a.ui;
+        ui.title("负一屏外观");
+        boolean hidden = breenoHidden();
+        ui.toggle("隐藏小布助手", hidden ? "负一屏不再显示小布那一行" : "负一屏顶部保留小布那一行",
+                hidden, () -> setBreeno(!breenoHidden()));
+        if (breenoBusy) ui.note("正在应用，下次打开负一屏生效…");
+        else ui.note("隐藏后，下面的卡片会顶上来；需要小布时随时可以打开。");
     }
 }
-

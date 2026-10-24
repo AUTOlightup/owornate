@@ -7,8 +7,9 @@ import java.io.File;
  * 本机 root adbd 的唯一入口：进程内只读一次密钥文件，一次操作只开一个连接。
  *
  * <p>调用方把同一操作里的几条命令放进一个 {@link Body}，它们共用一次握手和一次 RSA 签名
- * （{@link AdbClient#shell} 支持在一个连接上连续开流）。命令本身仍然由各调用方固定拼好，
- * 这里不接受也不转发任何外部输入。
+ * （{@link AdbClient#shell} 支持在一个连接上连续开流）。调用方为包内管理器；
+ * 本地插件仅在用户信任导入后，由 PluginRunner 校验协议并引用私有目录中的脚本。
+ * 不向其他应用导出 shell 接口。
  */
 final class RootShell {
     interface Body<T> {

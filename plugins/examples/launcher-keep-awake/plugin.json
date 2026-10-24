@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "runtime": "launcher-v1",
+  "permissions": [
+    "root"
+  ],
+  "device": {
+    "model": "OW20W1",
+    "firmware": "OW20W1_11_A.92",
+    "sdk": 27,
+    "abi": "armeabi-v7a"
+  },
+  "id": "dev.example.launcher-keep-awake",
+  "name": "桌面调试常亮",
+  "description": "在 OPPO Watch2 Launcher 的 onResume 调用原方法后添加窗口 128 常亮标志，并在 onPause 调用原方法后移除。停用通过原 Launcher 重载撤去 Hook；不会修改全局系统设置。",
+  "versionName": "1.0.1",
+  "versionCode": 2,
+  "settings": []
+}

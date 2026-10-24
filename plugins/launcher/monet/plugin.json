@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "runtime": "launcher-v1",
+  "permissions": [
+    "root"
+  ],
+  "device": {
+    "model": "OW20W1",
+    "firmware": "OW20W1_11_A.92",
+    "sdk": 27,
+    "abi": "armeabi-v7a"
+  },
+  "id": "dev.owornate.monet",
+  "name": "莫奈取色",
+  "description": "控制中心主题取色、圆角与详情页配色。需要管理器提供的主题设置接口。",
+  "versionName": "1.1.0",
+  "versionCode": 2,
+  "settings": [],
+  "nativeSettings": [
+    {
+      "type": "choice",
+      "key": "mode",
+      "title": "配色方式",
+      "default": "auto",
+      "options": [
+        {"value": "auto", "label": "自动取色"},
+        {"value": "fixed", "label": "固定颜色"},
+        {"value": "original", "label": "系统原色"}
+      ]
+    },
+    {
+      "type": "choice",
+      "key": "corners",
+      "title": "连续圆角",
+      "default": "true",
+      "options": [
+        {"value": "true", "label": "开启"},
+        {"value": "false", "label": "关闭"}
+      ]
+    }
+  ]
+}

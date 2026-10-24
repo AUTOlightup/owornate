@@ -190,8 +190,9 @@ final class AdbClient implements Closeable {
             } catch (NumberFormatException ignored) {
                 exitCode = -1;
             }
-            int lineStart = text.lastIndexOf('\n', index);
-            text = text.substring(0, lineStart < 0 ? 0 : lineStart);
+            int outputEnd = index;
+            if (outputEnd > 0 && text.charAt(outputEnd - 1) == '\n') outputEnd--;
+            text = text.substring(0, outputEnd);
         }
         return text;
     }

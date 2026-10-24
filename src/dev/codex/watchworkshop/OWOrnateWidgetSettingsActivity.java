@@ -5,40 +5,30 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
 
 /**
  * OWOrnate 信息小组件设置页。所有信息卡片共用一份显示设置；三个显示项点了就生效，页首预览同步变化。
  *
  * <p>本页不改动优化运行状态，也不自动轮询：只有用户点“读取最新状态”时才在后台调用一次
- * {@link ModuleManager#read}，缓存与卡片的更新由该方法负责。
+ * {@link ModuleManager#read}（与莫奈读写同在 {@link DeviceQueues#GENERAL}），缓存与卡片的更新由该方法负责。
  */
 public final class OWOrnateWidgetSettingsActivity extends WatchActivity {
-
-    /** 与莫奈读写共用队列；后台线程只调 ModuleManager，不访问任何 view。 */
-    private static final ExecutorService io = MonetPages.IO;
     private final SharedPreferences.OnSharedPreferenceChangeListener runtimeChanged = (store, key) -> {
         if (!destroyed()) render();
     };
 
-    @Override protected void onStart() {
-        super.onStart();
-        RuntimeStateStore.preferences(this).registerOnSharedPreferenceChangeListener(runtimeChanged);
-    }
-
-    @Override protected void onStop() {
-        RuntimeStateStore.preferences(this).unregisterOnSharedPreferenceChangeListener(runtimeChanged);
-        super.onStop();
-    }
-
-    private boolean reading, readFailed;
-    private int card = NO_CARD;
-    private boolean showStatus, showTheme, showVersion;
-    private String error = "", readNote = "";
+    private boolean reading;
+    private boolean readFailed;
+    private boolean showStatus;
+    private boolean showTheme;
+    private boolean showVersion;
+    private String error = "";
+    private String readNote = "";
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        if (!resolveTarget()) return;
+        if (!claimCard(OWOrnateWidgetProvider.class)) return;
+        observeWhileStarted(RuntimeStateStore.preferences(this), runtimeChanged);
         loadOptions();
         if (state != null) remember("edit", state.getInt("scroll", 0));
         render();
@@ -47,7 +37,7 @@ public final class OWOrnateWidgetSettingsActivity extends WatchActivity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (destroyed() || !resolveTarget()) return;
+        if (destroyed() || !claimCard(OWOrnateWidgetProvider.class)) return;
         error = "";
         readNote = "";
         readFailed = false;
@@ -62,18 +52,6 @@ public final class OWOrnateWidgetSettingsActivity extends WatchActivity {
 
     @Override public void onBackPressed() {
         finish();
-    }
-
-    /** 带了卡片 id 时必须是信息卡片，否则不写数据直接结束；管理器直接打开时不带 id。 */
-    private boolean resolveTarget() {
-        card = cardTarget(OWOrnateWidgetProvider.class);
-        if (card == REJECTED) {
-            setResult(RESULT_CANCELED);
-            finish();
-            return false;
-        }
-        acceptCard(card);
-        return true;
     }
 
     private void loadOptions() {
@@ -102,34 +80,20 @@ public final class OWOrnateWidgetSettingsActivity extends WatchActivity {
         readNote = "";
         readFailed = false;
         render();
-        io.execute(() -> {
-            String report;
-            boolean confirmed;
-            try {
-                ModuleState state = ModuleManager.read(getApplicationContext());
-                if (state.installed() && state.activeKnown) {
-                    report = "已确认：莫奈" + (state.active ? "已启用。" : "已停用。");
-                    confirmed = true;
-                } else if ("available".equals(state.kind)) {
-                    report = "已确认：莫奈未安装。";
-                    confirmed = true;
-                } else {
-                    report = "未确认：" + state.message;
-                    confirmed = false;
-                }
-            } catch (Exception problem) {
-                report = "读取未完成：" + message(problem);
-                confirmed = false;
+        inBackground(DeviceQueues.GENERAL, () -> ModuleManager.read(getApplicationContext()), (state, problem) -> {
+            reading = false;
+            if (problem != null) {
+                readFailed = true;
+                readNote = "读取未完成：" + message(problem);
+            } else if (state.installed() && state.activeKnown) {
+                readNote = "已确认：莫奈" + (state.active ? "已启用。" : "已停用。");
+            } else if ("available".equals(state.kind)) {
+                readNote = "已确认：莫奈未安装。";
+            } else {
+                readFailed = true;
+                readNote = "未确认：" + state.message;
             }
-            final String text = report;
-            final boolean ok = confirmed;
-            runOnUiThread(() -> {
-                if (destroyed()) return;
-                reading = false;
-                readFailed = !ok;
-                readNote = text;
-                render();
-            });
+            render();
         });
     }
 

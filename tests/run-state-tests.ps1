@@ -53,6 +53,7 @@ $production = @(
     (Join-Path $srcRoot 'ModuleState.java'),
     (Join-Path $srcRoot 'CaptureModuleState.java'),
     (Join-Path $srcRoot 'RuntimeStateStore.java'),
+    (Join-Path $srcRoot 'RuntimeSupport.java'),
     (Join-Path $srcRoot 'ThemeConfig.java'),
     (Join-Path $srcRoot 'OWOrnateWidgetStore.java'),
     (Join-Path $srcRoot 'OWOrnateWidgetSnapshot.java')
@@ -60,7 +61,7 @@ $production = @(
 $stubs = @(Get-ChildItem -Path (Join-Path $PSScriptRoot 'state-stubs') -Recurse -Filter '*.java' |
     Sort-Object FullName | ForEach-Object { $_.FullName })
 $testSource = Join-Path $PSScriptRoot 'RuntimeStateStoreTest.java'
-$sources = @($production) + @($stubs) + @($testSource)
+$sources = @($production) + @($stubs) + @($testSource) + @(Join-Path $PSScriptRoot 'RuntimeSupportTest.java')
 foreach ($source in $sources) {
     if (!(Test-Path -Path $source)) { throw "缺少源文件: $source" }
 }
@@ -81,5 +82,8 @@ $classPath = $outClasses + [IO.Path]::PathSeparator + $JsonJar
 & "$JdkHome/bin/java.exe" @javaEncodingArgs -cp $classPath `
     dev.codex.watchworkshop.RuntimeStateStoreTest
 if ($LASTEXITCODE -ne 0) { throw 'RuntimeStateStoreTest 用例失败' }
+
+& "$JdkHome/bin/java.exe" @javaEncodingArgs -cp $classPath dev.codex.watchworkshop.RuntimeSupportTest
+if ($LASTEXITCODE -ne 0) { throw 'RuntimeSupportTest 用例失败' }
 
 Write-Host 'RuntimeStateStoreTest: OK'

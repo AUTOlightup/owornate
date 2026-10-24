@@ -19,7 +19,6 @@ Java.perform(function () {
   try {
     const Context = Java.use('android.content.Context');
     const View = Java.use('android.view.View');
-    const ViewGroup = Java.use('android.view.ViewGroup');
     const Intent = Java.use('android.content.Intent');
     const ComponentName = Java.use('android.content.ComponentName');
     const PackageManager = Java.use('android.content.pm.PackageManager');
@@ -174,7 +173,7 @@ Java.perform(function () {
         Java.scheduleOnMainThread(function () {
           launchCapture(action, ticket);
         });
-      }, 160);
+      }, action === 'screenshot' ? 32 : 160);
     }
 
     function requestCapture(action) {
@@ -473,33 +472,6 @@ Java.perform(function () {
       }
     });
 
-    function themeClassFromView(view) {
-      try {
-        const name = String(view.getClass().getName());
-        if (name === 'com.heytap.wearable.launcher.statusbar.view.LauncherToggleButton') {
-          const icon = Java.cast(view, Toggle).getIconDrawable();
-          if (icon !== null) {
-            const iconClass = icon.getClass();
-            const iconName = String(iconClass.getName());
-            if (iconName.indexOf('dev.codex.watchtheme.') === 0) {
-              const loader = iconClass.getClassLoader();
-              if (loader !== null) {
-                return Java.ClassFactory.get(loader).use('dev.codex.watchtheme.ControlTheme');
-              }
-            }
-          }
-        }
-        if (ViewGroup.class.isInstance(view)) {
-          const group = Java.cast(view, ViewGroup);
-          for (let i = 0; i < group.getChildCount(); i++) {
-            const found = themeClassFromView(group.getChildAt(i));
-            if (found !== null) return found;
-          }
-        }
-      } catch (_) {}
-      return null;
-    }
-
     function rebindTheme(panel) {
       try {
         const id = panel.getResources().getIdentifier('status_bar', 'id', LAUNCHER);
@@ -507,16 +479,23 @@ Java.perform(function () {
         const raw = panel.findViewById.overload('int').call(panel, id);
         if (raw === null) return;
         const root = Java.cast(raw, View);
-        if (cachedTheme === null) cachedTheme = themeClassFromView(root);
         if (cachedTheme === null) {
-          try { cachedTheme = Java.use('dev.codex.watchtheme.ControlTheme'); } catch (_) {}
+          // v11 loads the helper through this DexClassLoader. Native icons do
+          // not expose it until they have already been themed; discover the
+          // existing loader so a cold panel can collect its buttons as well.
+          const loaders = Java.enumerateClassLoadersSync();
+          for (let i = 0; i < loaders.length; i++) {
+            if (String(loaders[i]).indexOf('/data/local/tmp/watchface-theme/theme.jar') < 0) continue;
+            cachedTheme = Java.ClassFactory.get(loaders[i]).use('dev.codex.watchtheme.ControlTheme');
+            break;
+          }
         }
         if (cachedTheme !== null) {
           cachedTheme.bind(root);
           log('theme rebound after append');
           return;
         }
-        try { rpc.exports.themerefresh(); } catch (_) {}
+        log('theme rebind unavailable: theme helper loader not found');
       } catch (error) {
         log('theme rebind failed: ' + error);
       }

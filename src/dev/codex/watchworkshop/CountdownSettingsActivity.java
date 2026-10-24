@@ -6,12 +6,9 @@ import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextWatcher;
-import android.util.TypedValue;
-import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import java.io.IOException;
@@ -28,8 +25,6 @@ import java.time.LocalDate;
  * 只是打开看一眼不会写入任何东西。标题可以留空，卡片上显示“倒计时”。
  */
 public final class CountdownSettingsActivity extends WatchActivity {
-
-    private int card = NO_CARD;
 
     // 草稿
     private String title = "";
@@ -64,7 +59,7 @@ public final class CountdownSettingsActivity extends WatchActivity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        if (!resolveTarget()) return;
+        if (!claimCard(CountdownWidgetProvider.class)) return;
         loadStored();
         if (state != null) restore(state);
         AnniversarySync.listen(mirrorChanged);
@@ -82,7 +77,7 @@ public final class CountdownSettingsActivity extends WatchActivity {
         super.onNewIntent(intent);
         commit();
         setIntent(intent);
-        if (destroyed() || !resolveTarget()) return;
+        if (destroyed() || !claimCard(CountdownWidgetProvider.class)) return;
         loadStored();
         render();
     }
@@ -144,18 +139,6 @@ public final class CountdownSettingsActivity extends WatchActivity {
 
     @Override public void onBackPressed() {
         finish();
-    }
-
-    /** 带了卡片 id 时必须是倒计时卡片，否则不写数据直接结束；管理器直接打开时不带 id。 */
-    private boolean resolveTarget() {
-        card = cardTarget(CountdownWidgetProvider.class);
-        if (card == REJECTED) {
-            setResult(RESULT_CANCELED);
-            finish();
-            return false;
-        }
-        acceptCard(card);
-        return true;
     }
 
     private void loadStored() {
@@ -367,7 +350,7 @@ public final class CountdownSettingsActivity extends WatchActivity {
         CountdownModel.Frame frame = CountdownModel.frame(
                 AnniversaryData.config(entry, source.yearly(entry.id), false),
                 System.currentTimeMillis(), java.time.ZoneId.systemDefault());
-        String count = (frame.prefix + " " + frame.value + frame.unit).trim();
+        String count = frame.countText();
         return frame.detail.isEmpty() ? count : count + " · " + frame.detail;
     }
 
@@ -400,26 +383,15 @@ public final class CountdownSettingsActivity extends WatchActivity {
         }
     }
 
-    /** 单行输入框：13sp、44dp 命中高度、surface 圆角底。 */
+    /** 单行输入框：13sp、44dp 命中高度。 */
     private EditText field(String hint, String value) {
-        EditText input = new EditText(this);
-        input.setText(value);
-        input.setHint(hint);
-        input.setHintTextColor(WorkshopUi.WEAK);
-        input.setTextColor(WorkshopUi.FG);
-        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, WorkshopUi.BODY_SP);
+        EditText input = ui.input(hint, value, WorkshopUi.BODY_SP);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setSingleLine(true);
         input.setMaxLines(1);
         input.setImeOptions(EditorInfo.IME_ACTION_DONE);
         input.setFilters(titleLimit());
-        input.setPadding(dp(10), dp(8), dp(10), dp(8));
-        input.setMinHeight(dp(44));
-        input.setBackground(shape(WorkshopUi.SURFACE, 12));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.bottomMargin = dp(WorkshopUi.GAP);
-        body.addView(input, params);
+        input.setMinHeight(dp(WorkshopUi.HIT));
         return input;
     }
 

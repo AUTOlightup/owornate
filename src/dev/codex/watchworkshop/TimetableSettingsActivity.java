@@ -1,14 +1,22 @@
 package dev.codex.watchworkshop;
 
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
+import android.text.InputType;
+import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -23,9 +31,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,24 +54,20 @@ import java.util.concurrent.Executors;
  */
 public final class TimetableSettingsActivity extends WatchActivity {
 
-    /** 单个课表 JSON 的上限，与 {@link TimetableStore#save} 的校验保持一致。 */
-    private static final int MAX_JSON_BYTES = 1024 * 1024;
+    /** 单个课表 JSON 的上限，导入时提前拦下，与保存时的校验是同一个值。 */
+    private static final int MAX_JSON_BYTES = TimetableStore.MAX_JSON_BYTES;
     /** 导入预览里最多列出的课程条数，避免一次渲染上百行。 */
     private static final int PREVIEW_LIMIT = 20;
     private static final int PICK_REQUEST = 4101;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
-    private static final String[] WEEKDAYS = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
 
-    /** 读取文件与解析 JSON 的专用单线程；后台任务不访问任何 view。 */
+    /** 读取文件、解析 JSON 与保存的专用单线程；后台任务不访问任何 view。 */
     private static final ExecutorService io = Executors.newSingleThreadExecutor();
 
     private String page = "";
     private boolean reading;
     private boolean pickerMissing;
     private boolean pasteLost;
-
-    /** 打开本页的卡片 id，只用于卡片预览的点按目标；管理器直接打开时为 NO_CARD。 */
-    private int card = NO_CARD;
 
     /** 已读取但尚未保存的课表：raw 可能接近 1 MB，只留在成员里，不进 Bundle。 */
     private String pendingRaw;
@@ -86,13 +88,25 @@ public final class TimetableSettingsActivity extends WatchActivity {
     private LocalDate shown;
     private EditText pasteField;
 
+    /** 后台读到并解析好的一份课表：原文、来源名和解析结果。 */
+    private static final class Import {
+        final String raw, source;
+        final TimetableData data;
+
+        Import(String raw, String source, TimetableData data) {
+            this.raw = raw;
+            this.source = source;
+            this.data = data;
+        }
+    }
+
     // ------------------------------------------------------------------
     // 生命周期
     // ------------------------------------------------------------------
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        if (!resolveTarget()) return;
+        if (!claimCard(TimetableWidgetProvider.class)) return;
         if (state != null) restore(state);
         loadCurrent();
         settle();
@@ -104,11 +118,8 @@ public final class TimetableSettingsActivity extends WatchActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (destroyed()) return;
-        if (!resolveTarget()) return;
-        pendingRaw = null;
-        pendingSource = "";
-        pending = null;
-        pendingReady = false;
+        if (!claimCard(TimetableWidgetProvider.class)) return;
+        clearPending();
         pasteLost = false;
         shown = null;
         error = "";
@@ -153,20 +164,8 @@ public final class TimetableSettingsActivity extends WatchActivity {
     }
 
     // ------------------------------------------------------------------
-    // 目标解析与已保存课表
+    // 已保存课表与页面状态
     // ------------------------------------------------------------------
-
-    /** 带了卡片 id 时必须是课表卡片，否则不写数据、返回 RESULT_CANCELED 并结束；管理器直接打开时不带 id。 */
-    private boolean resolveTarget() {
-        card = cardTarget(TimetableWidgetProvider.class);
-        if (card == REJECTED) {
-            setResult(RESULT_CANCELED);
-            finish();
-            return false;
-        }
-        acceptCard(card);
-        return true;
-    }
 
     /** 读一次已保存的课表；读不出来时只记原因，让页面提示，不写任何数据。 */
     private void loadCurrent() {
@@ -209,6 +208,14 @@ public final class TimetableSettingsActivity extends WatchActivity {
         pasteLost = state.getBoolean("pastePresent", false) && pasteDraft.isEmpty();
     }
 
+    /** 丢掉未保存的导入草稿。 */
+    private void clearPending() {
+        pendingRaw = null;
+        pendingSource = "";
+        pending = null;
+        pendingReady = false;
+    }
+
     // ------------------------------------------------------------------
     // 导入：文件选择、粘贴、读取与解析
     // ------------------------------------------------------------------
@@ -230,7 +237,7 @@ public final class TimetableSettingsActivity extends WatchActivity {
                 .setType("application/json")
                 .putExtra(Intent.EXTRA_MIME_TYPES,
                         new String[]{"application/json", "text/plain", "*/*"})
-                .putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI,
+                .putExtra(DocumentsContract.EXTRA_INITIAL_URI,
                         Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload"));
         try {
             startActivityForResult(intent, PICK_REQUEST);
@@ -260,43 +267,29 @@ public final class TimetableSettingsActivity extends WatchActivity {
         reading = true;
         error = "";
         render();
-        io.execute(() -> {
-            TimetableData parsed = null;
-            String failure = null;
-            try {
-                parsed = ShiguangJson.parse(raw, stored());
-                if (parsed == null) failure = "没有解析出课表内容";
-            } catch (Exception problem) {
-                failure = message(problem);
-            }
-            deliver(raw, "粘贴内容", parsed, failure);
-        });
+        inBackground(io, () -> new Import(raw, "粘贴内容", parse(raw)), this::finishRead);
     }
 
-    /** 选中的文件在后台线程读取并解析；解析基线取该目标当前已保存的课表。 */
+    /** 选中的文件在后台线程读取并解析。 */
     private void readFile(final Uri uri) {
         if (reading) return;
         reading = true;
         error = "";
         render();
-        io.execute(() -> {
-            String raw = null;
-            String source = "课表文件";
-            String failure = null;
-            TimetableData parsed = null;
-            try {
-                source = displayName(uri);
-                raw = readBytes(uri);
-                parsed = ShiguangJson.parse(raw, stored());
-                if (parsed == null) failure = "没有解析出课表内容";
-            } catch (Exception problem) {
-                failure = message(problem);
-            }
-            deliver(raw, source, parsed, failure);
-        });
+        inBackground(io, () -> {
+            String source = displayName(uri);
+            String raw = readBytes(uri);
+            return new Import(raw, source, parse(raw));
+        }, this::finishRead);
     }
 
-    /** 保存时会用同一份基线解析，预览用同样的基线，预览结果才和保存结果一致。 */
+    /** 后台：按已保存的课表补缺省字段来解析；保存时用同一份基线，预览才和保存结果一致。 */
+    private TimetableData parse(String raw) throws Exception {
+        TimetableData parsed = ShiguangJson.parse(raw, stored());
+        if (parsed == null) throw new IOException("没有解析出课表内容");
+        return parsed;
+    }
+
     private TimetableData stored() {
         try {
             return TimetableStore.read(getApplicationContext());
@@ -305,26 +298,22 @@ public final class TimetableSettingsActivity extends WatchActivity {
         }
     }
 
-    /** 后台读取完成后的收尾：切到预览页，或在导入页报错。这里已经回到主线程。 */
-    private void deliver(final String raw, final String source, final TimetableData parsed,
-                         final String failure) {
-        runOnUiThread(() -> {
-            if (destroyed()) return;
-            reading = false;
-            if (failure != null) {
-                error = "无法导入（" + failure + "）。已保存的课表保持不变。";
-                render();
-                return;
-            }
-            pendingRaw = raw;
-            pendingSource = source;
-            pending = parsed;
-            pendingReady = true;
-            dateDraft = parsed.semesterStart == null ? "" : parsed.semesterStart.toString();
-            error = "";
-            page = "preview";
+    /** 主线程：读取完成后切到预览页，或在导入页报错。 */
+    private void finishRead(Import read, Exception problem) {
+        reading = false;
+        if (problem != null) {
+            error = "无法导入（" + message(problem) + "）。已保存的课表保持不变。";
             render();
-        });
+            return;
+        }
+        pendingRaw = read.raw;
+        pendingSource = read.source;
+        pending = read.data;
+        pendingReady = true;
+        dateDraft = read.data.semesterStart == null ? "" : read.data.semesterStart.toString();
+        error = "";
+        page = "preview";
+        render();
     }
 
     /** 文件名的可读形式：优先问文档提供方，退回 URI 末段。 */
@@ -375,7 +364,7 @@ public final class TimetableSettingsActivity extends WatchActivity {
      * 最后回到总览页看导入结果。
      */
     private void save() {
-        if(reading)return;
+        if (reading) return;
         capture();
         if (pendingRaw == null || pending == null) {
             error = "导入内容已经不在了，请重新选择文件或粘贴 JSON。";
@@ -387,41 +376,54 @@ public final class TimetableSettingsActivity extends WatchActivity {
             fail("课表超过 1 MB，请先裁剪再导入。");
             return;
         }
-        LocalDate override = null;
-        String draft = dateDraft.trim();
-        if (!draft.isEmpty()) {
-            try {
-                override = LocalDate.parse(draft);
-            } catch (DateTimeParseException bad) {
-                fail("开学日期要写成 yyyy-MM-dd，例如 2026-02-23。");
-                return;
-            }
-        }
-        if (override == null && pending.semesterStart == null) {
-            fail("这个文件没有开学日期，请先调整第 1 周的日期。");
+        final LocalDate start;
+        try {
+            start = startOverride();
+        } catch (IOException invalid) {
+            fail(invalid.getMessage());
             return;
         }
-        final String raw=pendingRaw;final LocalDate start=override;
-        final android.content.Context app=getApplicationContext();
-        reading=true;render();
-        io.execute(()->{
-            String error=null;
-            try{
-                TimetableStore.save(app,raw,start,"system");
-                TimetableWidgetProvider.updateAll(app);WidgetClock.schedule(app);
-            }catch(Exception failure){error="保存失败："+message(failure);}
-            final String report=error;
-            runOnUiThread(()->{
-                if(destroyed())return;reading=false;
-                if(report!=null){fail(report);return;}
-                pendingRaw=null;pending=null;pendingSource="";pendingReady=false;dateDraft="";
-                shown=null;this.error="";
-                loadCurrent();
-                page=hasTable()?"today":"import";
-                remember(page,0);
-                render();
-            });
+        final String raw = pendingRaw;
+        final Context app = getApplicationContext();
+        reading = true;
+        render();
+        inBackground(io, () -> {
+            TimetableStore.save(app, raw, start, "system");
+            TimetableWidgetProvider.updateAll(app);
+            WidgetClock.schedule(app);
+            return null;
+        }, (unused, problem) -> {
+            reading = false;
+            if (problem != null) {
+                fail("保存失败：" + message(problem));
+                return;
+            }
+            clearPending();
+            dateDraft = "";
+            shown = null;
+            error = "";
+            loadCurrent();
+            page = hasTable() ? "today" : "import";
+            remember(page, 0);
+            render();
         });
+    }
+
+    /**
+     * 保存时用的开学日期：调整过就用草稿里的，没调整时为 null（沿用文件里的）。
+     * 写法不对，或文件和草稿都没有开学日期时，抛出给用户看的原因。
+     */
+    private LocalDate startOverride() throws IOException {
+        String draft = dateDraft.trim();
+        if (draft.isEmpty()) {
+            if (pending.semesterStart == null) throw new IOException("这个文件没有开学日期，请先调整第 1 周的日期。");
+            return null;
+        }
+        try {
+            return LocalDate.parse(draft);
+        } catch (DateTimeParseException bad) {
+            throw new IOException("开学日期要写成 yyyy-MM-dd，例如 2026-02-23。");
+        }
     }
 
     private void fail(String message) {
@@ -465,11 +467,7 @@ public final class TimetableSettingsActivity extends WatchActivity {
                 shown.getDayOfWeek().getValue() - current.firstDayOfWeek, 7));
         LocalDate weekEnd = weekStart.plusDays(6);
         boolean thisWeek = !today.isBefore(weekStart) && !today.isAfter(weekEnd);
-        int week = current.week(shown);
-        String title = week < 1 ? "开学前"
-                : current.totalWeeks > 0 && week > current.totalWeeks ? "学期结束后"
-                : "第 " + week + " 周";
-        if (thisWeek) title += " · 本周";
+        String title = TimetableText.weekTitle(current, current.week(shown)) + (thisWeek ? " · 本周" : "");
         ui.pager(title, weekStart.getMonthValue() + "/" + weekStart.getDayOfMonth() + " – "
                 + weekEnd.getMonthValue() + "/" + weekEnd.getDayOfMonth(),
                 () -> moveWeek(-1), () -> moveWeek(1),
@@ -490,48 +488,17 @@ public final class TimetableSettingsActivity extends WatchActivity {
         render();
     }
 
-    private static String monthDay(LocalDate date) {
-        return date.getMonthValue() + "月" + date.getDayOfMonth() + "日";
-    }
-
-    /** 一周七天的选择条：星期、日期和“这天有课”的小点；选中项高亮，今天的日期用强调色。 */
+    /** 一周七天的选择条；选中项高亮，今天的日期用强调色。 */
     private void dayTabs(LocalDate weekStart, LocalDate today, ZoneId zone) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         for (int index = 0; index < 7; index++) {
-            final LocalDate date = weekStart.plusDays(index);
-            boolean selected = date.equals(shown);
-            boolean isToday = date.equals(today);
-            int count = TimetableFocus.lessons(current, date, zone).size();
-            LinearLayout cell = new LinearLayout(this);
-            cell.setOrientation(LinearLayout.VERTICAL);
-            cell.setGravity(Gravity.CENTER_HORIZONTAL);
-            cell.setPadding(0, dp(6), 0, dp(6));
-            cell.setMinimumHeight(dp(56));
-            GradientDrawable fill = shape(selected ? WorkshopUi.ACCENT_SURFACE : WorkshopUi.SURFACE, 12);
-            if (selected) fill.setStroke(dp(1), WorkshopUi.SELECT_RING);
-            cell.setBackground(new android.graphics.drawable.RippleDrawable(
-                    android.content.res.ColorStateList.valueOf(0x33ffffff), fill, shape(0xffffffff, 12)));
-            int ink = selected || isToday ? WorkshopUi.ACCENT : WorkshopUi.FG;
-            cell.addView(centered(text(WEEKDAYS[date.getDayOfWeek().getValue() - 1].substring(1), 11,
-                    selected ? WorkshopUi.ACCENT : WorkshopUi.MUTED, false)));
-            cell.addView(centered(text(String.valueOf(date.getDayOfMonth()), 15, ink, true)));
-            android.view.View dot = new android.view.View(this);
-            dot.setBackground(shape(count > 0 ? (selected ? WorkshopUi.ACCENT : WorkshopUi.WEAK) : 0x00000000, 3));
-            LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(5), dp(5));
-            dotParams.topMargin = dp(3);
-            cell.addView(dot, dotParams);
-            cell.setContentDescription(monthDay(date) + " " + WEEKDAYS[date.getDayOfWeek().getValue() - 1]
-                    + (isToday ? "，今天" : "") + (count > 0 ? "，" + count + " 节课" : "，没有课"));
-            cell.setOnClickListener(v -> {
-                shown = date;
-                render();
-            });
+            LocalDate date = weekStart.plusDays(index);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             params.leftMargin = dp(index == 0 ? 0 : 2);
             params.rightMargin = dp(index == 6 ? 0 : 2);
-            row.addView(cell, params);
+            row.addView(dayCell(date, today, TimetableFocus.lessons(current, date, zone).size()), params);
         }
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -539,14 +506,45 @@ public final class TimetableSettingsActivity extends WatchActivity {
         body.addView(row, rowParams);
     }
 
+    /** 选择条里的一天：星期、日期和“这天有课”的小点。 */
+    private View dayCell(LocalDate date, LocalDate today, int count) {
+        boolean selected = date.equals(shown);
+        boolean isToday = date.equals(today);
+        LinearLayout cell = new LinearLayout(this);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        cell.setGravity(Gravity.CENTER_HORIZONTAL);
+        cell.setPadding(0, dp(6), 0, dp(6));
+        cell.setMinimumHeight(dp(56));
+        GradientDrawable fill = shape(selected ? WorkshopUi.ACCENT_SURFACE : WorkshopUi.SURFACE, 12);
+        if (selected) fill.setStroke(dp(1), WorkshopUi.SELECT_RING);
+        cell.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33ffffff), fill, shape(0xffffffff, 12)));
+        int ink = selected || isToday ? WorkshopUi.ACCENT : WorkshopUi.FG;
+        String weekday = TimetableText.weekday(date.getDayOfWeek());
+        cell.addView(centered(text(weekday.substring(1), 11,
+                selected ? WorkshopUi.ACCENT : WorkshopUi.MUTED, false)));
+        cell.addView(centered(text(String.valueOf(date.getDayOfMonth()), 15, ink, true)));
+        View dot = new View(this);
+        dot.setBackground(shape(count > 0 ? (selected ? WorkshopUi.ACCENT : WorkshopUi.WEAK) : 0x00000000, 3));
+        LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(5), dp(5));
+        dotParams.topMargin = dp(3);
+        cell.addView(dot, dotParams);
+        cell.setContentDescription(TimetableText.monthDay(date) + " " + weekday
+                + (isToday ? "，今天" : "") + (count > 0 ? "，" + count + " 节课" : "，没有课"));
+        cell.setOnClickListener(v -> {
+            shown = date;
+            render();
+        });
+        return cell;
+    }
+
     /** 所选那天的课程：标题行说明日期和节数，每节课一张卡片；今天的卡片标出已结束、上课中和下一节。 */
     private void dayLessons(LocalDate today, ZoneId zone) {
         List<TimetableFocus.Lesson> lessons = TimetableFocus.lessons(current, shown, zone);
         boolean isToday = shown.equals(today);
-        ui.title(WEEKDAYS[shown.getDayOfWeek().getValue() - 1] + " · " + monthDay(shown)
+        ui.title(TimetableText.weekday(shown.getDayOfWeek()) + " · " + TimetableText.monthDay(shown)
                 + (isToday ? " · 今天" : "") + (lessons.isEmpty() ? "" : " · " + lessons.size() + " 节课"));
         if (lessons.isEmpty()) {
-            ui.note(emptyNote(current, shown, isToday));
+            ui.note(TimetableText.emptyNote(current, shown, isToday));
             return;
         }
         ZonedDateTime now = ZonedDateTime.now(zone);
@@ -565,23 +563,36 @@ public final class TimetableSettingsActivity extends WatchActivity {
         }
     }
 
-    /** 一节课：左侧状态色条；第一行时间与状态，第二行课程名，第三行节次、地点和教师。 */
+    /** 一节课：左侧状态色条，右侧三行文字（时间与状态、课程名、节次地点教师）。 */
     private void lessonCard(TimetableFocus.Lesson lesson, String state) {
         boolean ongoing = state.equals("上课中");
-        boolean ended = state.equals("已结束");
         boolean next = state.equals("下一节");
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.HORIZONTAL);
         GradientDrawable fill = shape(ongoing ? WorkshopUi.ACCENT_SURFACE : WorkshopUi.SURFACE, 15);
         if (ongoing) fill.setStroke(dp(1), WorkshopUi.SELECT_RING);
-        card.setBackground(fill);
-        android.view.View bar = new android.view.View(this);
+        tile.setBackground(fill);
+        View bar = new View(this);
         bar.setBackground(shape(ongoing ? WorkshopUi.ACCENT : next ? WorkshopUi.MUTED : WorkshopUi.OUTLINE, 2));
         LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(dp(3),
                 ViewGroup.LayoutParams.MATCH_PARENT);
         barParams.setMargins(dp(8), dp(10), 0, dp(10));
-        card.addView(bar, barParams);
+        tile.addView(bar, barParams);
+        String detail = TimetableText.lessonDetail(lesson.course);
+        tile.addView(lessonText(lesson, state, detail),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        tile.setContentDescription((state.isEmpty() ? "" : state + "，") + lesson.start.format(TIME) + " 到 "
+                + lesson.end.format(TIME) + "，" + lesson.course.name + (detail.isEmpty() ? "" : "，" + detail));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = dp(WorkshopUi.GAP);
+        body.addView(tile, params);
+    }
 
+    /** 课程卡片的文字列：第一行时间与状态，第二行课程名，第三行节次、地点和教师。 */
+    private View lessonText(TimetableFocus.Lesson lesson, String state, String detail) {
+        boolean ongoing = state.equals("上课中");
+        boolean ended = state.equals("已结束");
         LinearLayout column = new LinearLayout(this);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setPadding(dp(9), dp(8), dp(10), dp(9));
@@ -591,18 +602,18 @@ public final class TimetableSettingsActivity extends WatchActivity {
                 ongoing ? WorkshopUi.ACCENT : WorkshopUi.FG, true);
         head.addView(time, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         if (!state.isEmpty()) {
-            head.addView(text(state, 11, ongoing ? WorkshopUi.ACCENT : ended ? WorkshopUi.WEAK : WorkshopUi.MUTED, false));
+            int stateColor = ongoing ? WorkshopUi.ACCENT : ended ? WorkshopUi.WEAK : WorkshopUi.MUTED;
+            head.addView(text(state, 11, stateColor, false));
         }
         column.addView(head);
         TextView name = text(lesson.course.name.isEmpty() ? "未命名课程" : lesson.course.name, 15,
                 ended ? WorkshopUi.MUTED : WorkshopUi.FG, true);
         name.setMaxLines(2);
-        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        name.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nameParams.topMargin = dp(3);
         column.addView(name, nameParams);
-        String detail = lessonDetail(lesson.course);
         if (!detail.isEmpty()) {
             TextView line = text(detail, 11, ended ? WorkshopUi.WEAK : WorkshopUi.MUTED, false);
             LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(
@@ -610,22 +621,7 @@ public final class TimetableSettingsActivity extends WatchActivity {
             lineParams.topMargin = dp(2);
             column.addView(line, lineParams);
         }
-        card.addView(column, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        card.setContentDescription((state.isEmpty() ? "" : state + "，") + lesson.start.format(TIME) + " 到 "
-                + lesson.end.format(TIME) + "，" + lesson.course.name + (detail.isEmpty() ? "" : "，" + detail));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.bottomMargin = dp(WorkshopUi.GAP);
-        body.addView(card, params);
-    }
-
-    /** 节次、地点、教师，缺哪项就略过哪项。 */
-    private static String lessonDetail(TimetableData.Course course) {
-        StringBuilder out = new StringBuilder();
-        if (course.customStart == null && course.startSection > 0) out.append(sectionText(course));
-        if (!course.position.isEmpty()) out.append(out.length() == 0 ? "" : " · ").append(course.position);
-        if (!course.teacher.isEmpty()) out.append(out.length() == 0 ? "" : " · ").append(course.teacher);
-        return out.toString();
+        return column;
     }
 
     private static TextView centered(TextView view) {
@@ -638,8 +634,7 @@ public final class TimetableSettingsActivity extends WatchActivity {
         view.setText(value);
         view.setTextColor(color);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-        view.setTypeface(medium ? android.graphics.Typeface.create("sans-serif-medium",
-                android.graphics.Typeface.NORMAL) : android.graphics.Typeface.SANS_SERIF);
+        view.setTypeface(medium ? Typeface.create("sans-serif-medium", Typeface.NORMAL) : Typeface.SANS_SERIF);
         view.setLineSpacing(0f, 1.2f);
         return view;
     }
@@ -691,12 +686,12 @@ public final class TimetableSettingsActivity extends WatchActivity {
         if (pending.courses.isEmpty()) {
             ui.note("文件里没有解析出课程条目，保存后课表是空的。", "warning");
         }
-        int shown = Math.min(pending.courses.size(), PREVIEW_LIMIT);
-        for (int index = 0; index < shown; index++) {
-            ui.text(entry(pending.courses.get(index)));
+        int listed = Math.min(pending.courses.size(), PREVIEW_LIMIT);
+        for (int index = 0; index < listed; index++) {
+            ui.text(TimetableText.entry(pending.courses.get(index)));
         }
-        if (pending.courses.size() > shown) {
-            ui.note("还有 " + (pending.courses.size() - shown) + " 条没有列出，保存后会全部写入。");
+        if (pending.courses.size() > listed) {
+            ui.note("还有 " + (pending.courses.size() - listed) + " 条没有列出，保存后会全部写入。");
         }
         ui.note("确认无误后点“保存课表”，这一步才会写入并替换已保存的课表。");
         ui.button(reading ? "正在保存…" : "保存课表", true, !reading, this::save);
@@ -712,56 +707,8 @@ public final class TimetableSettingsActivity extends WatchActivity {
     }
 
     // ------------------------------------------------------------------
-    // 文案与小工具
+    // 输入框
     // ------------------------------------------------------------------
-
-    private static String sectionText(TimetableData.Course course) {
-        if (course.customStart != null) return "自定义时段";
-        if (course.startSection == 0 && course.endSection == 0) return "未指定节次";
-        return course.startSection == course.endSection
-                ? "第 " + course.startSection + " 节"
-                : "第 " + course.startSection + "–" + course.endSection + " 节";
-    }
-
-    /** 预览条目：周一 第 1–2 节 · 课程 · 地点 · 老师 · 周次。 */
-    private static String entry(TimetableData.Course course) {
-        int day = Math.max(1, Math.min(7, course.day));
-        StringBuilder line = new StringBuilder(WEEKDAYS[day - 1])
-                .append(' ').append(sectionText(course))
-                .append(" · ").append(course.name.isEmpty() ? "未命名课程" : course.name);
-        if (!course.position.isEmpty()) line.append(" · ").append(course.position);
-        if (!course.teacher.isEmpty()) line.append(" · ").append(course.teacher);
-        line.append(" · ").append(weeks(course.weeks));
-        return line.toString();
-    }
-
-    /** 把周次折成 1-5,7,9-16 这样的一段文字，过长时截断显示。 */
-    private static String weeks(Set<Integer> weeks) {
-        if (weeks.isEmpty()) return "未指定周次";
-        List<Integer> sorted = new ArrayList<>(weeks);
-        StringBuilder out = new StringBuilder();
-        int index = 0;
-        while (index < sorted.size()) {
-            int from = sorted.get(index);
-            int to = from;
-            while (index + 1 < sorted.size() && sorted.get(index + 1) == to + 1) {
-                to = sorted.get(++index);
-            }
-            if (out.length() > 0) out.append(',');
-            out.append(from == to ? String.valueOf(from) : from + "-" + to);
-            index++;
-        }
-        String text = out.append(" 周").toString();
-        return text.length() > 30 ? text.substring(0, 29) + "…" : text;
-    }
-
-    /** 今天没有课时说明原因：没开学、已结束，还是当天确实没排课。 */
-    private static String emptyNote(TimetableData data, LocalDate date, boolean isToday) {
-        int week = data.week(date);
-        if (week < 1) return "还没到第 1 周：第 1 周从 " + data.alignedStart() + " 开始。";
-        if (data.totalWeeks > 0 && week > data.totalWeeks) return "本学期课程已经结束。";
-        return isToday ? "今天没有课。" : "这天没有课。";
-    }
 
     /** 把输入框里的文字收进草稿；重建页面前必须调用，否则正在输入的内容会丢。 */
     private void capture() {
@@ -770,25 +717,14 @@ public final class TimetableSettingsActivity extends WatchActivity {
 
     /** 多行粘贴框：没有文件选择器时的主要入口，字体取次一级，长文本也能上下滚动查看。 */
     private EditText multilineField(String value) {
-        EditText input = new EditText(this);
-        input.setText(value);
-        input.setHint("把课表 JSON 全文粘贴到这里");
-        input.setHintTextColor(WorkshopUi.WEAK);
-        input.setTextColor(WorkshopUi.FG);
-        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, WorkshopUi.SECONDARY_SP);
-        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
-                | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        EditText input = ui.input("把课表 JSON 全文粘贴到这里", value, WorkshopUi.SECONDARY_SP);
+        input.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setGravity(Gravity.TOP | Gravity.START);
         input.setSingleLine(false);
         input.setMinLines(4);
         input.setMaxLines(10);
-        input.setPadding(dp(10), dp(8), dp(10), dp(8));
-        input.setBackground(shape(WorkshopUi.SURFACE, 12));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.bottomMargin = dp(WorkshopUi.GAP);
-        body.addView(input, params);
         return input;
     }
 

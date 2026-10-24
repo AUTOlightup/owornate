@@ -58,6 +58,8 @@ public final class RuntimeStateStoreTest {
                 RuntimeStateStoreTest::captureModuleFailureRetainsState);
         run("截屏录屏模块状态不覆盖正在进行的录制会话",
                 RuntimeStateStoreTest::captureModuleDoesNotOverwriteSession);
+        run("运行组件 owner 持久化并兼容旧快照",
+                RuntimeStateStoreTest::ownerFieldsRoundTripAndLegacyDefaults);
 
         System.out.println();
         System.out.println("RuntimeStateStoreTest: " + passed + " passed, " + failed + " failed");
@@ -91,6 +93,60 @@ public final class RuntimeStateStoreTest {
         eq("recording session retained","recording",context.getSharedPreferences("capture_runtime",0).getString("phase",""));
         RuntimeStateStore.recordCapture(context,new CaptureModuleState("disabled"));
         eq("projection does not mutate the process session","recording",context.getSharedPreferences("capture_runtime",0).getString("phase",""));
+    }
+
+    private static void ownerFieldsRoundTripAndLegacyDefaults() {
+        Context context = new Context();
+        RuntimeStateStore.recordMonet(context, new ModuleState("shared", "shared", true,
+                "共享组件 · 已启用", true, null));
+        RuntimeStateStore.recordWidgets(context, new WidgetHostManager.Status("ready", "present", "own"));
+        RuntimeStateStore.recordCapture(context, new CaptureModuleState("disabled", "own"));
+        eq("monet owner", "shared", RuntimeStateStore.monet(context).value.owner);
+        eq("widget owner", "own", RuntimeStateStore.widgets(context).value.owner);
+        eq("capture owner", "own", RuntimeStateStore.capture(context).value.owner);
+        RuntimeStateStore.recordTheme(context, theme("fixed", 0xff112233, true));
+        eq("theme update keeps monet owner", "shared", RuntimeStateStore.monet(context).value.owner);
+
+        SharedPreferences old = RuntimeStateStore.preferences(context);
+        check(old.edit()
+                .putString("monet", "{\"confirmedAt\":1,\"error\":\"\",\"value\":{\"kind\":\"shared\",\"active\":true,\"activeKnown\":true,\"message\":\"old\"}}")
+                .putString("widgets", "{\"confirmedAt\":1,\"error\":\"\",\"value\":{\"host\":\"ready\",\"keep\":\"present\"}}")
+                .putString("capture", "{\"confirmedAt\":1,\"error\":\"\",\"value\":{\"kind\":\"disabled\"}}")
+                .commit(), "seed old owner-less snapshots");
+        eq("legacy shared monet inferred owner", "shared", RuntimeStateStore.monet(context).value.owner);
+        eq("legacy widget owner remains unknown", "", RuntimeStateStore.widgets(context).value.owner);
+        eq("legacy capture owner remains unknown", "", RuntimeStateStore.capture(context).value.owner);
+        check(!RuntimeStateStore.widgets(context).value.removable(),
+                "legacy widget owner cannot remove before refresh");
+        check(!RuntimeStateStore.capture(context).value.removable(),
+                "legacy capture owner cannot remove before refresh");
+        check(old.edit().putString("monet",
+                "{\"confirmedAt\":1,\"error\":\"\",\"value\":{\"kind\":\"installed\",\"active\":true,\"activeKnown\":true,\"message\":\"old\"}}")
+                .commit(), "seed owner-less installed monet");
+        check(!RuntimeStateStore.monet(context).value.removable(),
+                "legacy monet owner cannot remove before refresh");
+
+        RuntimeStateStore.recordMonet(context, new ModuleState("disabled", "own", false,
+                "已安装 · 已停用", true, null));
+        eq("monet disabled owner", "own", RuntimeStateStore.monet(context).value.owner);
+        check(RuntimeStateStore.monet(context).value.removable(),
+                "own disabled monet remains removable");
+        RuntimeStateStore.recordMonet(context, new ModuleState("update", "own", false,
+                "已安装 · 需要更新", false, null));
+        eq("monet update owner", "own", RuntimeStateStore.monet(context).value.owner);
+        RuntimeStateStore.recordMonet(context, new ModuleState("setup", "setup", false,
+                "首次使用需要部署管理器", true, null));
+        eq("monet setup owner", "setup", RuntimeStateStore.monet(context).value.owner);
+        RuntimeStateStore.recordCapture(context, new CaptureModuleState("update", "own"));
+        eq("capture update owner", "own", RuntimeStateStore.capture(context).value.owner);
+        RuntimeStateStore.recordCapture(context, new CaptureModuleState("setup", "setup"));
+        eq("capture setup owner", "setup", RuntimeStateStore.capture(context).value.owner);
+        RuntimeStateStore.recordWidgets(context, new WidgetHostManager.Status("disabled", "present", "own"));
+        eq("widget disabled owner", "own", RuntimeStateStore.widgets(context).value.owner);
+        RuntimeStateStore.recordWidgets(context, new WidgetHostManager.Status("update", "present", "shared"));
+        eq("widget update owner", "shared", RuntimeStateStore.widgets(context).value.owner);
+        check(!RuntimeStateStore.widgets(context).value.removable(),
+                "shared widget update cannot be removed");
     }
 
     private static void migratesLegacyWidgetOptionsOnce() throws Exception {

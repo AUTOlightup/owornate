@@ -8,6 +8,8 @@ public class Context {
     public static final int MODE_PRIVATE = 0;
     private final Map<String, SharedPreferences> stores = new HashMap<>();
 
+    public Context getApplicationContext() { return this; }
+
     public synchronized SharedPreferences getSharedPreferences(String name, int mode) {
         SharedPreferences store = stores.get(name);
         if (store == null) {

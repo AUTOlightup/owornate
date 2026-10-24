@@ -1,31 +1,35 @@
-# OWOrnate · Monet 主题源码
+# OWOrnate · Monet helper 源码
 
-本仓库只包含控制中心莫奈取色的源码与运行件，用于单独发布主题模块。它不包含管理器 app、Frida 二进制、预制 keys 或 OPPO APK 素材。
+本包（`watch2-monet-source`）只包含控制中心莫奈取色的 helper 与运行时源码，用于审计和重建 `theme.jar`/运行时片段。它不包含管理器 App、Frida 二进制、预制 keys 或 OPPO APK 素材，不能单独完成整机部署。
 
 ## 目录
 
 | 路径 | 内容 |
 | --- | --- |
-| `native-src/` | ControlTheme、ThemePalette、FaceSource、ControlChrome、ControlCorners、CornerGeometry、ThemeBridge 等源码 |
-| `vendor/` | Material Color Utilities 的 HCT / 量化 / Score / 工具类（Apache-2.0） |
-| `standalone/hook.js` | 在 Launcher 进程内载入 theme.jar 的注入脚本 |
-| `standalone/monet-service.sh` | 主题专用 root supervisor（ensure / status / stop / restart-launcher） |
-| `standalone/module-manage.sh` | 表端模块生命周期脚本（status / install / enable / disable / uninstall） |
-| `build.ps1` | 构建 WatchTheme-helper-v6.jar |
+| `native-src/` | `ControlTheme`、`ThemePalette`、`FaceSource`、`ControlChrome`、`ControlCorners`、`CornerGeometry`、`ThemeBridge` 等 helper 源码 |
+| `vendor/` | Material Color Utilities 的 HCT、量化、Score 与工具类（Apache-2.0） |
+| `build.ps1` | 构建 `WatchTheme-helper-v6.jar` |
+| `standalone/runtime-base.js`、`standalone/runtime-hook.js` | 自有 Launcher 运行时基础与莫奈 helper 注入核心 |
+| `standalone/runtime-core.js`、`runtime-commit.js`、`runtime-manage.sh`、`runtime-service.sh` | 运行时装配、提交、生命周期与 root supervisor |
+| `standalone/monet-service.sh`、`module-manage.sh`、`hook.js` | 旧独立莫奈安装与兼容材料 |
+| `standalone/widget-host.js` | 负一屏小组件运行时基础 |
+| `standalone/build-runtime.ps1` | 由 runtime 基础、小组件与捕获片段生成可校验的运行时载荷 |
+| `widget-host/capture-controls.js`、`widget-host/capture-indicator.js` | 截屏录屏控制与表盘指示器源码片段 |
 | `PROTOCOL.md` | 莫奈主题通道协议 v1 |
-| `licenses/` | 第三方组件声明 |
-| `LICENSE` | MIT |
+| `licenses/`、`LICENSE` | 第三方组件声明与本项目 MIT 许可 |
 
-## 架构：HCT helper v6 与双模式闭合 mailbox
+本包不包含管理器的 Activity、页面、插件导入器、设置 UI、发布打包脚本或管理器 APK。它不是完整的 launcher-v1 插件源码包：`monet-1.1.0.owo` 的清单与 Hook 由发布附件提供，helper `theme.jar` 可由这里的源码重建。
+
+## 架构：HCT helper v6 与闭合 mailbox
 
 - helper 运行在 Launcher 进程内，用 HCT 从当前表盘派生配色，并按 `mode` / `seed` / `corners` 应用。
 - 控制通道是 Launcher 私有目录里的闭合 mailbox：app 写一条固定格式 `request.json`，helper 用 `FileObserver` 响应并写 `ack.json` 回执；app 不提供任意 shell 或外部端口入口。
-- 双模式：独立模式使用本包运行目录 `/data/local/tmp/watchworkshop-runtime`，莫奈文件由管理器 APK 内置资源在表端安装；共享模式支持已知 watchhide v9/v10/v11 + helper v6，识别后直接管理，不替换共享运行文件。
-- 协议、会话、过期与错误码见 `PROTOCOL.md`。
+- 自有模式使用运行目录 `/data/local/tmp/watchworkshop-runtime`。code26 起，莫奈 `hook.js` 与 helper `theme.jar` 由用户导入并信任的 `.owo` 提供；本候选包为 `monet-1.1.0.owo`。管理器 APK 提供协调器、原生设置接口、运行时脚本和已知共享 Hook 兼容载荷，不再从 APK 回退自有莫奈载荷。
+- 共享模式支持已知 WatchHide v9/v10/v11/v12/v13 + helper v6。识别后由管理器管理；未经用户显式接入不替换共享运行文件。Windows Setup 和插件导入都不会自动替换共享 Hook。
 
-注入脚本只处理控制中心外观，不涉及 NFC、WatchHide、QQ、蓝点或全局 View Hook。
+`runtime-hook.js` 是旧版合成载荷，随源码保留供兼容与历史检查；当前自有 v4 按 core → 导入插件的功能 Hook → commit 装配，不以这个旧合成文件回退。已知 v3 可迁移并保留已部署载荷与启停选择；旧 v2 的真实迁移仍未验收。自有运行组件不包含 NFC 点击替换、WatchHide 应用隐藏或 QQ 蓝点。
 
-## 构建
+## 构建 helper
 
 ```powershell
 pwsh -File .\build.ps1 -SdkRoot <AndroidSDK> -JdkHome <JDK>
@@ -33,14 +37,18 @@ pwsh -File .\build.ps1 -SdkRoot <AndroidSDK> -JdkHome <JDK>
 
 产物为 `dist/WatchTheme-helper-v6.jar`。构建只用 JDK 与 Android SDK（platform 与 build-tools 中的 d8），不联网。
 
-这个脚本直接取 `<AndroidSDK>/platforms/android-35/android.jar` 与 `<AndroidSDK>/build-tools/35.0.0/lib/d8.jar`，没有版本回退：本机缺少 android-35 或 build-tools 35.0.0 时构建直接失败。管理器的发布包已经带同一份 `assets/monet/theme.jar`（helper v6，SHA256 `706205ab96a67bfca062bca5152f89fe7cfaddc5ed9db2fe121d1697723dca74`），只有需要重建主题运行件时才跑这里的构建。
+脚本直接取 `<AndroidSDK>/platforms/android-35/android.jar` 与 `<AndroidSDK>/build-tools/35.0.0/lib/d8.jar`，没有版本回退：本机缺少 android-35 或 build-tools 35.0.0 时构建直接失败。
+
+helper v6 `theme.jar` SHA-256 为 `706205ab96a67bfca062bca5152f89fe7cfaddc5ed9db2fe121d1697723dca74`。`monet-1.1.0.owo` 沿用同一字节，只更新 `plugin.json` 的声明；管理器 APK 不含这份自有莫奈载荷，只有需要重建主题运行件时才运行这里的构建。
 
 ## 分发与部署
 
-管理器 1.0.0 起，莫奈模块 `theme.jar`、`hook.js`、`monet-service.sh`、`module-manage.sh` 随签名 APK 内置（`assets/monet/`），首次用电脑运行一次 `00-Setup.cmd` 部署管理器后，安装与生命周期都在手表上完成，不需要电脑或联网下载。
+OWOrnate 1.0.1-rc22 / code31 的基础环境由 Windows 包的 `00-Setup.cmd` 一次性准备。Setup 不导入功能：首次使用需要把 `monet-1.1.0.owo` 放到手表 `Download`，在管理器“发现优化 → 本地插件”导入并确认信任，再从插件管理页或莫奈功能页完成部署/启用。
 
-本源码仓库不带 Frida 二进制、预制 keys 或 OPPO APK 素材，无法单独完成整机部署；完整部署使用管理器发布的 Windows 安装包。
+导入包保存在管理器私有目录，运行载荷部署到管理器自有环境。普通功能页卸载运行组件会保留导入包；本地插件页卸载会先清理自有运行组件，再移除导入包。两条路径均保留用户配置和媒体。
+
+本源码包不带 Frida 二进制、预制 keys 或 OPPO APK 素材，无法单独完成整机部署；完整部署使用管理器发布的 Windows 安装包。共享环境继续使用既有 Hook/helper，不能把本包当作替换共享组件的安装器。
 
 ## 状态
 
-空白候选待测：空白 root 手表首次部署、表端模块生命周期与整机重启恢复为待实机验收。在线目录与下载尚未接入。
+当前管理器候选为 code31 / 1.0.1-rc22，复用已构建、已实机验证的原证书 APK，尚未上传。helper v6 与莫奈 1.1.0 的 Hook/theme.jar 字节不变；声明式配色/圆角已与原主题页双向同步验收。code31 已完成第三方错误恢复和 v4 重启，code30 的 v3→v4 迁移证据继续有效；rc22 更新清单未上传，真实公网下载到系统安装器及旧 v2 真实迁移仍未验收。实际录制、QQ 送达、长期功耗和其他固件版本也不在本版证据内。

@@ -6,7 +6,8 @@
 
   安全边界（本轮刻意保持最小暴露面）：
   - 申请 INTERNET、RECEIVE_BOOT_COMPLETED、WAKE_LOCK 和 PACKAGE_USAGE_STATS；
-    录屏期间使用有限时亮屏锁，不额外申请存储或音频权限，文件由已有 root 通道写入。
+    录屏期间使用有限时亮屏锁，文件由已有 root 通道写入。
+    READ_EXTERNAL_STORAGE 仅在用户选择从 Download 导入本地插件时申请。
     PACKAGE_USAGE_STATS 只在倒计时切到纪念日模式时经本机 root 授予（appops），切回时撤回；
     只用来判断快应用引擎是否到过前台，从而决定亮屏时要不要重读纪念日。
   - 只有一个带 LAUNCHER 入口的 Activity；三个小组件设置页只响应 APPWIDGET_CONFIGURE。
@@ -24,14 +25,16 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="dev.codex.watchworkshop"
-    android:versionCode="18"
-    android:versionName="1.0.1-rc9">
+    android:versionCode="31"
+    android:versionName="1.0.1-rc22">
 
     <uses-sdk
         android:minSdkVersion="26"
         android:targetSdkVersion="27" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 仅用户录屏期间保持 Android 屏幕亮起；结束或进程退出即释放。 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -71,6 +74,13 @@
             android:excludeFromRecents="true" android:noHistory="true"
             android:theme="@style/AppTheme" />
         <service android:name="dev.codex.watchworkshop.CaptureService" android:exported="false" />
+        <activity android:name="dev.codex.watchworkshop.PluginActivity"
+            android:exported="false" android:label="本地插件" android:theme="@style/AppTheme" />
+        <activity android:name="dev.codex.watchworkshop.UpdateActivity"
+            android:exported="false" android:label="更新" android:theme="@style/AppTheme" />
+        <provider android:name="dev.codex.watchworkshop.UpdateApkProvider"
+            android:authorities="dev.codex.watchworkshop.updates" android:exported="false"
+            android:grantUriPermissions="true" />
         <activity android:name="dev.codex.watchworkshop.CaptureSetupActivity"
             android:exported="false" android:theme="@style/AppTheme" />
         <activity android:name="dev.codex.watchworkshop.CaptureScreenshotActivity"

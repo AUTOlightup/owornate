@@ -1,5 +1,6 @@
 package dev.codex.watchworkshop;
 
+import android.content.Context;
 import android.content.Intent;
 
 /**
@@ -8,7 +9,7 @@ import android.content.Intent;
  * <p>状态只投影 {@link RuntimeStateStore}；接入配置仍在独立的
  * {@link CaptureSetupActivity}。</p>
  */
-final class CapturePages {
+final class CapturePages implements ModuleStatusView {
     private final MainActivity a;
     private StatusObservation<CaptureModuleState> observation;
     private CaptureModuleState state;
@@ -20,24 +21,27 @@ final class CapturePages {
         sync();
     }
 
-    boolean known() { return state != null; }
-    boolean installed() { return state != null && state.installed(); }
+    @Override public boolean known() { return state != null; }
+    @Override public boolean installed() { return state != null && state.installed(); }
     /** 只有确认完成的 available 才算可安装；读取失败仍保留上次状态。 */
-    boolean available() {
+    @Override public boolean available() {
         return state != null && "available".equals(state.kind) && !failed()
                 && observation.confirmedAt > 0;
     }
-    boolean failed() { return !error.isEmpty(); }
-    String error() { return error; }
-    boolean refreshing() { return refreshing; }
+    @Override public boolean failed() { return !error.isEmpty(); }
+    boolean needsSetup() { return state != null && "setup".equals(state.kind) && !failed(); }
+    boolean incompatible() { return state != null && "conflict".equals(state.kind) && !failed(); }
+    @Override public String error() { return error; }
+    @Override public boolean refreshing() { return refreshing; }
+    boolean confirmed() { return observation != null && observation.confirmedAt > 0; }
 
     void sync() {
         observation = RuntimeStateStore.capture(a);
         state = observation.value;
-        error = observation.error == null ? "" : observation.error;
+        error = observation.error;
     }
 
-    String statusText() {
+    @Override public String statusText() {
         if (failed()) return state == null ? error : "上次：" + state.message() + " · 本次读取失败";
         if (refreshing && state == null) return "正在读取状态…";
         if (state == null) return "状态待检查";
@@ -45,15 +49,16 @@ final class CapturePages {
         return state.message();
     }
 
-    String discoverLine() {
+    @Override public String discoverLine() {
         if (failed()) return statusText();
-        if (installed()) return state.kind.equals("ready") ? "已安装 · 控制中心截屏与录屏" : statusText();
+        if (installed()) return statusText();
         if (available()) return "内置 · 可离线接入";
         return statusText();
     }
 
-    void homeRow() {
-        a.ui.row("截屏与录屏", statusText(), "scan", this::open);
+    @Override public boolean showOnHome() {
+        return installed() || failed() || (state != null
+                && ("setup".equals(state.kind) || "conflict".equals(state.kind)));
     }
 
     void open() {
@@ -68,21 +73,12 @@ final class CapturePages {
         if (!force && observation.fresh(System.currentTimeMillis(), MainActivity.FRESH_MS)) return;
         refreshing = true;
         a.render();
-        MonetPages.IO.execute(() -> {
-            String problem = "";
-            try {
-                WidgetHostManager.captureState(a.getApplicationContext());
-            } catch (Exception e) {
-                problem = WatchActivity.message(e);
-            }
-            final String message = problem;
-            a.runOnUiThread(() -> {
-                if (a.destroyed()) return;
-                refreshing = false;
-                sync();
-                if (error.isEmpty() && !message.isEmpty()) error = message;
-                a.render();
-            });
+        Context app = a.getApplicationContext();
+        a.inBackground(DeviceQueues.GENERAL, () -> WidgetHostManager.captureState(app), (read, problem) -> {
+            refreshing = false;
+            sync();
+            if (problem != null && error.isEmpty()) error = WatchActivity.message(problem);
+            a.render();
         });
     }
 }

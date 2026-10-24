@@ -4,11 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
-import android.graphics.ColorFilter;
 import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.PixelFormat;
-import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -20,13 +16,10 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 
 /**
  * 腕上工坊通用原生组件（首发 UI 对照实现）。
@@ -141,7 +134,7 @@ public final class WorkshopUi {
      * 使用与 {@link #toggle} 相同的 SwitchMark 开关外观。开关命中区 44dp，
      * 标题占满剩余宽度并在必要时单行省略，确保返回、标题、开关在画布上不重叠。
      *
-     * <p>内容描述随状态变化：true「停用莫奈」、false「启用莫奈」、null「正在读取莫奈状态」。
+     * <p>内容描述随模块标题和启停状态变化。
      * enabled=false 时关闭点击并把开关压暗以给出明确反馈。
      */
     public void headerToggle(String title, Runnable back, Boolean checked, boolean enabled,
@@ -150,7 +143,7 @@ public final class WorkshopUi {
         TriSwitchMark mark = new TriSwitchMark(activity);
         mark.setState(checked);
         mark.setBackground(press(0x00000000, 12));
-        mark.setContentDescription(toggleDescription(checked));
+        mark.setContentDescription(toggleDescription(title, checked));
         mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         mark.setFocusable(true);
         if (enabled && action != null) {
@@ -195,11 +188,11 @@ public final class WorkshopUi {
         return head;
     }
 
-    private static String toggleDescription(Boolean checked) {
+    private static String toggleDescription(String title, Boolean checked) {
         if (checked == null) {
-            return "正在读取莫奈状态";
+            return "正在读取" + title + "状态";
         }
-        return checked ? "停用莫奈" : "启用莫奈";
+        return (checked ? "停用" : "启用") + title;
     }
 
     // ------------------------------------------------------------------
@@ -221,22 +214,10 @@ public final class WorkshopUi {
 
     /** 说明卡。tone: "" 中性 / warning / success / danger。 */
     public TextView note(String value, String tone) {
-        int background = SURFACE;
-        int ink = MUTED;
-        if ("warning".equals(tone)) {
-            background = WARNING_BG;
-            ink = WARNING;
-        } else if ("success".equals(tone)) {
-            background = SUCCESS_BG;
-            ink = SUCCESS;
-        } else if ("danger".equals(tone)) {
-            background = DANGER_BG;
-            ink = DANGER;
-        }
-        TextView v = text(value, SECONDARY_SP, ink, regular);
+        TextView v = text(value, SECONDARY_SP, toneInk(tone, MUTED), regular);
         v.setLineSpacing(0f, 1.55f);
         v.setPadding(dp(10), dp(8), dp(10), dp(8));
-        v.setBackground(shape(background, NOTE_RADIUS));
+        v.setBackground(shape(toneBackground(tone), NOTE_RADIUS));
         return (TextView) add(v);
     }
 
@@ -315,7 +296,7 @@ public final class WorkshopUi {
                 new LinearLayout.LayoutParams(dp(CHEVRON), dp(CHEVRON));
         chevronParams.leftMargin = dp(4);
         r.addView(chevron, chevronParams);
-        r.setContentDescription(sub == null || sub.isEmpty() ? label : label + "，" + sub);
+        r.setContentDescription(describe(label, sub));
         final Runnable tap = action;
         r.setOnClickListener(v -> tap.run());
         return add(r);
@@ -324,43 +305,51 @@ public final class WorkshopUi {
     /** 单选行：整行选择，右侧 radio 反映真实选中状态；选中时用强调色低亮面。 */
     public View choice(String label, String sub, boolean checked, Runnable action) {
         CheckRow r = new CheckRow(activity, "android.widget.RadioButton");
-        r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setMinimumHeight(dp(ROW_MIN));
-        r.setPadding(dp(9), dp(8), dp(9), dp(8));
-        r.setBackground(choiceBackground(checked));
-        r.addView(copy(label, sub),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        RadioMark mark = new RadioMark(activity);
-        LinearLayout.LayoutParams markParams = new LinearLayout.LayoutParams(dp(16), dp(16));
-        markParams.leftMargin = dp(7);
-        r.addView(mark, markParams);
-        r.attach(mark);
-        r.setChecked(checked);
-        r.setContentDescription(sub == null || sub.isEmpty() ? label : label + "，" + sub);
-        final Runnable tap = action;
-        r.setOnClickListener(v -> tap.run());
-        return add(r);
+        return checkRow(r, choiceBackground(checked), label, sub, new RadioMark(activity),
+                dp(16), dp(16), checked, action);
     }
 
     /** 开关行：点击整个 48dp 行，右侧为 Canvas 绘制的连续圆角 Switch。 */
     public View toggle(String label, String sub, boolean checked, Runnable action) {
         CheckRow r = new CheckRow(activity, "android.widget.Switch");
+        return checkRow(r, press(SURFACE, ROW_RADIUS), label, sub, new SwitchMark(activity),
+                dp(34), dp(20), checked, action);
+    }
+
+    /** choice 与 toggle 共用的行：文字在左，选中标记在右，整行可点。 */
+    private <M extends View & Mark> View checkRow(CheckRow r, Drawable background, String label,
+            String sub, M mark, int markWidth, int markHeight, boolean checked, Runnable action) {
         r.setGravity(Gravity.CENTER_VERTICAL);
         r.setMinimumHeight(dp(ROW_MIN));
         r.setPadding(dp(9), dp(8), dp(9), dp(8));
-        r.setBackground(press(SURFACE, ROW_RADIUS));
+        r.setBackground(background);
         r.addView(copy(label, sub),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        SwitchMark mark = new SwitchMark(activity);
-        LinearLayout.LayoutParams markParams = new LinearLayout.LayoutParams(dp(34), dp(20));
+        LinearLayout.LayoutParams markParams = new LinearLayout.LayoutParams(markWidth, markHeight);
         markParams.leftMargin = dp(7);
         r.addView(mark, markParams);
         r.attach(mark);
         r.setChecked(checked);
-        r.setContentDescription(sub == null || sub.isEmpty() ? label : label + "，" + sub);
+        r.setContentDescription(describe(label, sub));
         final Runnable tap = action;
         r.setOnClickListener(v -> tap.run());
         return add(r);
+    }
+
+    /**
+     * 输入框：surface 圆角底、10/8dp 内边距、提示用弱化色；调用方再设输入类型、行数等。
+     * 和其他内容块一样追加到页面末尾，自带 6dp 下间距。
+     */
+    public EditText input(String hint, String value, float sizeSp) {
+        EditText input = new EditText(activity);
+        input.setText(value);
+        input.setHint(hint);
+        input.setHintTextColor(WEAK);
+        input.setTextColor(FG);
+        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
+        input.setPadding(dp(10), dp(8), dp(10), dp(8));
+        input.setBackground(shape(SURFACE, NOTE_RADIUS));
+        return (EditText) add(input);
     }
 
     /**
@@ -405,7 +394,7 @@ public final class WorkshopUi {
             middle.setBackground(press(0x00000000, 12));
             middle.setOnClickListener(v -> center.run());
         }
-        middle.setContentDescription(sub == null || sub.isEmpty() ? title : title + "，" + sub);
+        middle.setContentDescription(describe(title, sub));
         r.addView(middle, new LinearLayout.LayoutParams(0, dp(HIT), 1f));
         ImageView right = hitIcon("chevron", 16, next == null ? WEAK : FG, "下一页");
         if (next != null) right.setOnClickListener(v -> next.run());
@@ -458,14 +447,7 @@ public final class WorkshopUi {
 
     /** 结果/空态头部：33dp 图标 + 结果标题 + 说明。tone: "" accent / success / warning / danger。 */
     public View hero(String icon, String title, String sub, String tone) {
-        int ink = ACCENT;
-        if ("success".equals(tone)) {
-            ink = SUCCESS;
-        } else if ("warning".equals(tone)) {
-            ink = WARNING;
-        } else if ("danger".equals(tone)) {
-            ink = DANGER;
-        }
+        int ink = toneInk(tone, ACCENT);
         LinearLayout block = new LinearLayout(activity);
         block.setOrientation(LinearLayout.VERTICAL);
         block.setPadding(dp(4), dp(4), dp(4), dp(8));
@@ -497,12 +479,38 @@ public final class WorkshopUi {
         return (int) (dp * density + 0.5f);
     }
 
+    /** 自绘控件里的 dp 换算。 */
+    private static int px(View view, float dp) {
+        return px(view.getResources().getDisplayMetrics().density, dp);
+    }
+
+    /** 语义文字色：success / warning / danger，其余（含空串）用 fallback。 */
+    private static int toneInk(String tone, int fallback) {
+        if ("success".equals(tone)) return SUCCESS;
+        if ("warning".equals(tone)) return WARNING;
+        if ("danger".equals(tone)) return DANGER;
+        return fallback;
+    }
+
+    /** 说明卡的语义底色；中性为 surface。 */
+    private static int toneBackground(String tone) {
+        if ("success".equals(tone)) return SUCCESS_BG;
+        if ("warning".equals(tone)) return WARNING_BG;
+        if ("danger".equals(tone)) return DANGER_BG;
+        return SURFACE;
+    }
+
     private View add(View view) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = dp(GAP);
         body.addView(view, lp);
         return view;
+    }
+
+    /** 无障碍朗读文本：名称，有说明时再接上说明。 */
+    private static String describe(String label, String sub) {
+        return sub == null || sub.isEmpty() ? label : label + "，" + sub;
     }
 
     private LinearLayout copy(String label, String sub) {
@@ -640,7 +648,7 @@ public final class WorkshopUi {
 
         @Override
         protected void onMeasure(int widthSpec, int heightSpec) {
-            setMeasuredDimension(resolveSize(unit(16), widthSpec), resolveSize(unit(16), heightSpec));
+            setMeasuredDimension(resolveSize(px(this, 16), widthSpec), resolveSize(px(this, 16), heightSpec));
         }
 
         @Override
@@ -649,18 +657,14 @@ public final class WorkshopUi {
             float cx = getWidth() / 2f;
             float cy = getHeight() / 2f;
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(unit(1));
+            paint.setStrokeWidth(px(this, 1));
             paint.setColor(checked ? ACCENT : WEAK);
-            canvas.drawCircle(cx, cy, radius - unit(0.5f), paint);
+            canvas.drawCircle(cx, cy, radius - px(this, 0.5f), paint);
             if (checked) {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(ACCENT);
-                canvas.drawCircle(cx, cy, unit(4), paint);
+                canvas.drawCircle(cx, cy, px(this, 4), paint);
             }
-        }
-
-        private int unit(float dp) {
-            return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
         }
     }
 
@@ -684,17 +688,13 @@ public final class WorkshopUi {
 
         @Override
         protected void onMeasure(int widthSpec, int heightSpec) {
-            setMeasuredDimension(resolveSize(unit(34), widthSpec), resolveSize(unit(20), heightSpec));
+            setMeasuredDimension(resolveSize(px(this, 34), widthSpec), resolveSize(px(this, 20), heightSpec));
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
             drawSwitchTrack(canvas, paint, 0f, 0f, getWidth(), getHeight(), checked,
                     getResources().getDisplayMetrics().density);
-        }
-
-        private int unit(float dp) {
-            return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
         }
     }
 
@@ -759,14 +759,14 @@ public final class WorkshopUi {
 
         @Override
         protected void onMeasure(int widthSpec, int heightSpec) {
-            setMeasuredDimension(resolveSize(unit(44), widthSpec), resolveSize(unit(44), heightSpec));
+            setMeasuredDimension(resolveSize(px(this, 44), widthSpec), resolveSize(px(this, 44), heightSpec));
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
             float density = getResources().getDisplayMetrics().density;
-            float width = unit(34);
-            float height = unit(20);
+            float width = px(this, 34);
+            float height = px(this, 20);
             float left = (getWidth() - width) / 2f;
             float top = (getHeight() - height) / 2f;
             if (state == null) {
@@ -774,10 +774,6 @@ public final class WorkshopUi {
                 return;
             }
             drawSwitchTrack(canvas, paint, left, top, width, height, state, density);
-        }
-
-        private int unit(float dp) {
-            return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
         }
     }
 

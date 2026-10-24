@@ -251,7 +251,8 @@ final class AnniversarySync {
             long now = System.currentTimeMillis();
             UsageEvents events = usage.queryEvents(Math.max(0L, since - 3_600_000L), now);
             UsageEvents.Event event = new UsageEvents.Event();
-            boolean used = false, foreground = false;
+            boolean used = false;
+            boolean foreground = false;
             while (events != null && events.hasNextEvent()) {
                 events.getNextEvent(event);
                 if (!ENGINE.equals(event.getPackageName())) continue;

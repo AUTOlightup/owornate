@@ -1,37 +1,119 @@
-# 安装与模块接入
+# 安装、首次设置与插件导入
 
-**当前版本：1.0.1-rc9 / versionCode 18。** 已同签覆盖安装并在原表 A.92 完成本轮捕获验证；完整范围见 [VALIDATION.md](VALIDATION.md)。
+**当前发布候选：1.0.1-rc22 / code31，发布准备快照；实际发布状态见 [GitHub 预发布](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc22)。** code31 修复无行尾换行 ADB 输出被截断、插件初始化错误详情不可见的问题。launcher-v1 继续使用 code30 的第三方接口与 v4 运行环境，保留已知 v3 迁移；共享 WatchHide 环境不部署第三方 Hook。Launcher 插件协议见同一文档目录中的 `LAUNCHER-PLUGINS.md`，验收边界见 [验证记录](VALIDATION.md)。
 
 ## 适用范围
 
-OPPO Watch 2 46mm / OW20W1 / A.92 / API27，需已有 root adbd。共享接入识别已知 Launcher Hook v9/v10/v11/v12，配套 helper v6。独立莫奈仍可用，小组件与捕获模块仅支持已知共享宿主环境。
+OPPO Watch 2 46mm / OW20W1 / A.92 / API27 / armeabi-v7a，已有 root adbd。安装包不负责获取 root。共享接入识别已知 Launcher Hook v9/v10/v11/v12/v13 与 helper v6；未知版本、未知独立组件或硬件不匹配时拒绝接管。
 
-## 首次安装与授权（需电脑）
+launcher-v1 保留莫奈、小组件、捕获三个官方接口，并接受第三方两文件 Hook 包；尚未提供自定义原生 Activity、服务或设置页 SDK。普通 root 脚本继续使用 shell-v1，协议见 [本地插件开发](PLUGIN-DEVELOPMENT.md)。
 
-完整解压 Windows 包，连接已开启 root adbd 的适配手表，运行 `00-Setup.cmd`。该入口安装 APK 并建立管理器的本机 root ADB 授权，安装包不负责获取 root。
+## 候选分发内容
 
-已有授权的用户可直接同签覆盖安装：
+本次公开发布候选维持 9 个顶层正式附件：管理器 APK、Windows 包、管理器源码包、莫奈 helper 源码包、三个官方 `.owo`、`owornate-updates.json` 和 `SHA256SUMS.txt`。实际归档和摘要核对属于发布流程；文件名与验收边界见 [GitHub 发布说明](GITHUB-RELEASE.md)。
+
+Windows 包完整解压后包含：
 
 ```text
-adb install -r OWOrnate-v1.0.1-rc9.apk
+OWOrnate-v1.0.1-rc22-Windows/
+  00-Setup.cmd
+  01-Status.cmd
+  02-EnableWidgets.cmd
+  release-manage.ps1
+  manifest.json
+  README.md
+  docs/
+  licenses/
+  tools/adb/
+  payload/OWOrnate-v1.0.1-rc22.apk
+  payload/frida-inject
+  payload/plugins/monet-1.1.0.owo
+  payload/plugins/widgets-1.0.0.owo
+  payload/plugins/capture-1.1.0.owo
+  plugins/examples/screen-timeout/
+  plugins/examples/launcher-keep-awake/
 ```
 
-同签覆盖升级保留应用数据。单独 `adb install` 不建立首次授权；尚未授权时仍需运行 `00-Setup.cmd`。已接入共享 Hook v12 的用户更新后可直接使用，无需因本版改动重新接入或重载 Launcher。日常接入、启停及设置在手表上完成，后续 APK 更新仍用电脑安装。
+`plugins/examples/launcher-keep-awake/` 提供第三方示例源码和可直接导入的 `launcher-keep-awake-1.0.1.owo`。该示例不占顶层正式附件，也不进入官方更新清单。插件创建、校验、打包和独立清单工具只随完整管理器源码包提供。
 
-## 负一屏小组件
+公开 APK 复用已构建并通过实机验收的 code31 原字节，拟命名为 `OWOrnate-v1.0.1-rc22.apk`：341,073 bytes，SHA-256 `a8f52477c9284750cacdf25496e88eebf54f2efbc4043b09883c4e161ba1c790`。它为非 debuggable 构建，沿用原证书；候选发布不重新构建或重新签名。
 
-打开管理器 → **发现优化 → 负一屏小组件 → 接入负一屏**。确认后复用本机 root 通道，核对环境、备份 Hook、更新到 v12，并定向重载一次 Launcher。已接入时通过模块页的重新接入或修复后台更新处理对应问题；仅打开页面、读取状态不会修改 Hook 或白名单。
+## 电脑首次设置
 
-接入后可在负一屏原生编辑页添加 OWOrnate 信息、倒计时、课表，点卡片设置。每类共用一份配置；课表支持拾光单表 JSON，倒计时支持只读系统“纪念日”。模块页“隐藏小布助手”下次打开负一屏生效，不重载表盘。
+完整解压 Windows 包，连接已开启 root adbd 的适配手表，在解压目录运行：
 
-## 截屏与录屏
+```text
+00-Setup.cmd
+```
 
-打开管理器 → **发现优化 → 截屏与录屏 → 安装**，确认后核对共享环境、备份并更新 Hook 到 v12，定向重载一次 Launcher。打开管理器不会自动安装或接入。
+Setup 只准备管理器运行所需的基础环境，**不安装功能，也不导入或部署 `payload/plugins` 中的 `.owo`**：
 
-控制中心第二页有截屏与录屏两个按钮。未录制时直接打开快捷录屏页，三档画质横排、保留上次选择，底部开始按钮始终可见；更多参数说明收在“更多说明”。短按截屏先收起面板再保存 PNG；短按录屏先选码率，点击开始后返回原界面录制，同一按钮再次短按停止。长按分别进入 OWOrnate 截屏页、录屏设置页。停用模块先正常停止已有录屏，再隐藏按钮，保留文件和画质设置。
+1. 校验发布清单、设备型号、系统版本、ABI、Launcher 版本和已知组件指纹。
+2. 同签安装或覆盖管理器 APK，等待管理器生成本机 ADB 公钥并加入系统授权。
+3. 部署固定版本的 `frida-inject`，加入管理器无障碍服务、启用恢复入口，并仅为管理器加入 doze 白名单。
+4. 首次设置前保存 ADB 端口、无障碍服务和 doze 白名单快照；已有本包快照时保留原值。
+5. 把 ADB 本机通道固定到 5555；需要切换时执行 `adb tcpip 5555`、重连并重新确认 root、硬件和兼容性；局域网连接改用同一地址的 5555 端口。
+6. 写入 `manager-ready` 后，用一次性 GUID 启动管理器认证。管理器通过自身 root 回环连接读取结果，并原子写入应用私有 `files/setup-check.json`。Setup 只接受令牌完全匹配且 `ok:true` 的结果；15 秒内没有匹配结果、`ok:false` 或回写错误都会让 Setup 失败。
 
-码率 0.6 / 1.2 / 2.4 Mbps，默认 1.2；原分辨率、无声、H.264/MP4、单段最多 180 秒。实际帧率随画面变化，不提供固定 60fps。截图保存到 `Pictures/Screenshots`，录屏保存到 `Movies/Screenrecords`，旧文件保留原位。详细限制见 [原生捕获说明](截屏录屏-原生版.md)。
+电脑端 `adb root` 成功不能单独证明管理器可用；回环认证失败时不会报告部署成功。依次检查手表是否解锁、管理器是否报错、root adbd 是否仍可用后，重新运行 `00-Setup.cmd`。不要在压缩包内直接运行脚本；必须保持 `payload/`、`tools/` 与 `release-manage.ps1` 的相对目录完整。
 
-## 电脑备用入口
+## 首次导入与部署
 
-`01-Status.cmd` 读取状态，`02-EnableWidgets.cmd` 更新共享 Hook 并重载 Launcher，作为管理器通道异常时的备用入口。系统进程白名单仍由管理器检查和显式修复；首次授权使用 `00-Setup.cmd`。
+首次装好管理器后，仍需按以下步骤导入并部署功能：
+
+1. 把 Windows 包 `payload/plugins/` 下所需官方 `.owo` 复制到手表 `Download` 目录。使用系统文件选择器时也可以直接从其他可见位置选取。
+2. 打开 OWOrnate → `发现优化` → `本地插件`，选择包，确认名称、版本、ID、描述和 root 权限说明，再点击“信任并导入”。
+3. 导入只注册包；shell-v1 会在确认导入后读取一次 `status`，但不会自动启用。launcher-v1 也不会因为导入而自动部署 Hook、重载 Launcher 或替换共享组件。
+4. 在插件管理页或对应功能页完成部署/接入，再按需要启用：
+
+| 功能 | 包 | 首次动作 |
+| --- | --- | --- |
+| 莫奈取色 | `monet-1.1.0.owo` | 导入并信任 → 安装并启用；声明式设置要求管理器 code29+ |
+| 负一屏小组件 | `widgets-1.0.0.owo` | 导入并信任 → 接入负一屏 |
+| 截屏与录屏 | `capture-1.1.0.owo` | 导入并信任 → 安装模块；声明式画质要求管理器 code28+ |
+
+`打开功能设置` 只进入既有莫奈、小组件或采集设置页，不代替导入或部署。导入包保存在管理器私有目录，部署载荷位于管理器自有运行环境；普通功能页卸载运行组件会保留导入包，本地插件页卸载会先清理自有运行组件，再移除导入包。两条路径均保留用户配置、卡片、主题和媒体。
+
+第三方 launcher-v1 使用自己的 safeID，包只含 `plugin.json` 与 `hook.js`。导入不会自动部署；用户之后安装或更新组件时，多个 Hook 共用单个 supervisor 和一次注入。Hook 是用户明确信任的进程内代码，没有沙箱隔离。
+
+## 已有共享环境
+
+已经安装已知共享 Hook 的手表仍使用同一个 `00-Setup.cmd`。已知共享分支继续完成公钥授权、`frida-inject`、无障碍/恢复配置、本机 ADB 通道、设置快照、`manager-ready` 和应用内回环认证。Setup 不替换共享 Hook，也不修改 QQ 或其他共享组件。
+
+共享环境可以保留第三方导入包供以后迁移，但不能部署新的第三方 Hook。限制页把第三方开关显示为禁用；已验收的卸载模块入口会先要求确认，完成后返回三个官方插件列表。该操作不覆盖共享 Hook、helper、白名单或用户偏好。`02-EnableWidgets.cmd` 仅为旧入口兼容别名：它打开管理器并提示在表内操作，不更新 Hook、不重载 Launcher，也不写系统设置。
+
+## 升级
+
+安装 code27 或更高版本后，可从“设置 → 管理器更新”检查 GitHub 并下载；插件从管理页“检查插件更新”检查。rc22 候选清单尚未上传，因此当前目录中的 `owornate-updates.json` 不能当作在线更新源；旧公开 Release 若没有清单，页面会明确显示“尚未发布更新清单”。发布后，下载内容会先校验 ID、版本、大小和 SHA-256；APK 还要求原包名、严格更高 versionCode 与原签名，再交给系统安装器确认。
+
+插件也可以直接导入新版 `.owo`。脚本插件必须先停用；同 ID、同 runtime、严格更高 versionCode 才可升级。升级保留 `config.json`、旧默认值和 `data/<id>`；新包 status 无法确认停用或配置不兼容时恢复旧包。launcher-v1 升级只替换导入包，部署由用户另行确认。
+
+已有授权用户可同签覆盖安装新 APK，应用数据保留：
+
+```text
+adb install -r OWOrnate-v1.0.1-rc22.apk
+```
+
+仅执行 `adb install` 不建立或修复管理器的本机 root 授权。认证失效、更换电脑、恢复 root adbd 后，应重新运行完整 `00-Setup.cmd`。未知或混合的旧组件不自动覆盖；共享 Hook 是否升级以管理器显示的已知版本和用户操作确认为准。
+
+## 启动恢复与确认
+
+“服务已启动”表示守护进程已运行；只有服务确认当前 Launcher 的运行时已经就绪，管理器才显示“功能已就绪”。开机记录使用 `bootReady`，旧 `bootOk` 不作为就绪证据，手动恢复也不生成开机成功记录。`VerifyBoot` 同步检查新记录及实际运行状态；共享环境只检查既有 Hook/helper，不证明管理器自有组件开机恢复。
+
+code31 已在自有 v4 环境完成真实重启，首次打开管理器前取得当前 bootId 对应的就绪状态和实际运行映射。code30 已验证的 v3→v4 迁移保留已部署载荷与启停选择；旧 v2 的真实迁移仍未验收。
+
+## 独立生命周期与移除
+
+管理器基础环境与各个 Launcher 插件各自独立。第三方状态使用 `modules/<id>/installed` 和可选的 `disabled`；官方功能安装会写入 `/data/local/tmp/watchworkshop-runtime/modules/{monet,widgets,capture}` 安装标记；停用只改变对应启用设置，安装标记仍保留。在管理器内卸载功能不会删除本机授权、`frida-inject`、`manager-ready` 或设置快照。
+
+需要显式移除管理器基础环境时，在完整 Windows 包目录运行：
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\release-manage.ps1 -Action RemoveManager
+```
+
+RemoveManager 会拒绝任何仍存在的 `modules/monet`、`modules/widgets` 或 `modules/capture` 标记，也拒绝旧版 `installed` 独立莫奈标记。先回到管理器逐个卸载功能，再执行该命令。成功后只恢复首次设置保存的端口、无障碍和 doze 状态，删除本包的 `manager-ready`、`frida-inject` 与设置快照；共享 Hook、QQ 和未知文件保持不动。基础环境移除后才可在系统中卸载管理器 APP。
+
+## 历史说明
+
+code25 及更早版本使用 APK 内置的功能载荷；code26 起三个官方 launcher-v1 载荷改为用户导入的 `.owo`，code27 增加同 ID 升级和在线检查，code28 增加捕获画质声明，code29 增加莫奈配色/圆角声明，code30 开放第三方 launcher-v1 与 v4 运行环境，code31 修复插件错误输出详情。旧版本安装步骤与验收记录保留在 [VALIDATION.md](VALIDATION.md) 和 [ACCEPTANCE.md](ACCEPTANCE.md)，不作为当前安装流程。

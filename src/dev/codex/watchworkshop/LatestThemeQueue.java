@@ -6,36 +6,65 @@ import java.util.concurrent.Executor;
 final class LatestThemeQueue<T> {
     interface Worker<T> {
         void apply(T value) throws Exception;
+
         void failed(Exception error);
+
         void idle();
     }
+
     private final Executor executor;
     private final Worker<T> worker;
     private T pending;
-    private boolean running, recovering;
+    private boolean running;
+    private boolean recovering;
 
     LatestThemeQueue(Executor executor, Worker<T> worker) {
-        this.executor=executor; this.worker=worker;
+        this.executor = executor;
+        this.worker = worker;
     }
+
     synchronized boolean submit(T value) {
-        if(recovering)return false;
-        pending=value;
-        if(!running){running=true;executor.execute(this::drain);}
+        if (recovering) return false;
+        pending = value;
+        if (!running) {
+            running = true;
+            executor.execute(this::drain);
+        }
         return true;
     }
-    synchronized boolean isRunning(){return running;}
+
+    synchronized boolean isRunning() {
+        return running;
+    }
+
     private void drain() {
-        for(;;){
+        for (; ; ) {
             T value;
-            synchronized(this){
-                value=pending;pending=null;
-                if(value==null){running=false;break;}
+            synchronized (this) {
+                value = pending;
+                pending = null;
+                if (value == null) {
+                    running = false;
+                    break;
+                }
             }
-            try{worker.apply(value);}
-            catch(Exception error){
-                synchronized(this){pending=null;recovering=true;}
-                try{worker.failed(error);}
-                finally{synchronized(this){pending=null;recovering=false;running=false;}worker.idle();}
+            try {
+                worker.apply(value);
+            } catch (Exception error) {
+                synchronized (this) {
+                    pending = null;
+                    recovering = true;
+                }
+                try {
+                    worker.failed(error);
+                } finally {
+                    synchronized (this) {
+                        pending = null;
+                        recovering = false;
+                        running = false;
+                    }
+                    worker.idle();
+                }
                 return;
             }
         }

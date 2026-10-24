@@ -7,6 +7,7 @@ and idempotent repair on a host filesystem. It does not touch a watch.
 """
 from pathlib import Path
 import argparse
+import hashlib
 import os
 import shutil
 import stat
@@ -30,9 +31,17 @@ def check(condition, label):
 
 v11_source = (project / 'widget-host/WatchHide-Launcher-Hook-v11.js').read_bytes()
 v12_source = (project / 'widget-host/WatchHide-Launcher-Hook-v12.js').read_bytes()
+v13_source = (project / 'widget-host/WatchHide-Launcher-Hook-v13.js').read_bytes()
+V12_SHA = '4bc93055211b1c070155b45808955b6e41380c51edc63010ba8f0f759c508ac0'
+V13_SHA = 'd0d3406f1ce940f20f2089b2962c41d5eb0830249cd781887f37fecc90c088d7'
 check(v12_source.startswith(v11_source), 'v12 preserves the complete v11 byte prefix')
-check(v12_source == v11_source + b'\n' + (project / 'widget-host/capture-controls.js').read_bytes(),
-      'v12 exactly matches its source append block')
+check(hashlib.sha256(v12_source).hexdigest() == V12_SHA, 'v12 remains the released v12 bytes')
+check(hashlib.sha256(v13_source).hexdigest() == V13_SHA, 'v13 matches the integrated payload hash')
+check(v13_source.startswith(v11_source), 'v13 preserves the complete v11 byte prefix')
+check(v13_source == v11_source + b'\n'
+      + (project / 'widget-host/capture-controls.js').read_bytes() + b'\n'
+      + (project / 'widget-host/capture-indicator.js').read_bytes(),
+      'v13 exactly matches v11 + current controls + indicator')
 
 
 with tempfile.TemporaryDirectory(prefix='widget-host-', dir=work) as scratch:
@@ -46,8 +55,8 @@ with tempfile.TemporaryDirectory(prefix='widget-host-', dir=work) as scratch:
     for directory in (base, source, bin_dir, system, proc):
         directory.mkdir(parents=True, exist_ok=True)
 
-    shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v12.js', source / 'WatchHide-Launcher-Hook-v12.js')
-    shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v12.js', base / 'hook.js')
+    shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v13.js', source / 'WatchHide-Launcher-Hook-v13.js')
+    shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v13.js', base / 'hook.js')
     shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v10.js', root / 'hook-v10.js')
     shutil.copyfile(project / 'assets' / 'monet' / 'theme.jar', root / 'shared-theme.jar')
     (base / 'watchhide-bootstrap.sh').write_text('#!/bin/sh\necho supervisor_pid=123\n', encoding='utf-8', newline='\n')
@@ -68,6 +77,7 @@ with tempfile.TemporaryDirectory(prefix='widget-host-', dir=work) as scratch:
     write_cmd('settings', 'case "$1" in\nget) cat "$SIM_ROOT/settings-$3" 2>/dev/null || echo null;;\nput) printf "%s\\n" "$4" > "$SIM_ROOT/settings-$3";;\nesac\n')
 
     control = (project / 'widget-host' / 'widget-manage.sh').read_text(encoding='utf-8')
+    check(V13_SHA in control, 'widget script pins the v13 payload')
     control = control.replace('BASE=/data/local/tmp/watchhide', 'BASE=./base')
     control = control.replace('SOURCE=/data/user/0/dev.codex.watchworkshop/files/widget-host', 'SOURCE=./source')
     control = control.replace('SYS=/data/system/sys_process_switch_list.xml', 'SYS=./system/sys_process_switch_list.xml')
@@ -127,7 +137,7 @@ with tempfile.TemporaryDirectory(prefix='widget-host-', dir=work) as scratch:
         return p.stdout.strip()
 
     def set_ready(pid='424242'):
-        shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v12.js', base / 'hook.js')
+        shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v13.js', base / 'hook.js')
         (root / 'pid').write_text(pid + '\n', encoding='utf-8', newline='\n')
         (base / 'injected.marker').write_text(f'pid={pid} mode=ok at=0\n', encoding='utf-8', newline='\n')
 
@@ -222,8 +232,65 @@ with tempfile.TemporaryDirectory(prefix='widget-host-', dir=work) as scratch:
     check(not backup_path().exists(), 'repair did not create a backup')
     check(not tmp_path().exists(), 'repair did not create a temp file')
 
-    # install: v10 -> v12, one reload, then keepalive.
+    # v11 and v12 remain known; v13 is the install target.
+    shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v11.js', base / 'hook.js')
+    (base / 'injected.marker').write_text('pid=424242 mode=ok at=0\n', encoding='utf-8', newline='\n')
+    write_sys(entries + [PKG])
+    check(run('check') == ['ready', 'present'], 'v11 remains a known shared host')
+    check(run('capture-status') == ['available'], 'v11 has no capture controls')
+    check(run('breeno-hide') == ['hidden'], 'v11 breeno hide preserved')
+    check(run('breeno-show') == ['shown'], 'v11 breeno show preserved')
+
+    shutil.copyfile(project / 'widget-host' / 'WatchHide-Launcher-Hook-v12.js', base / 'hook.js')
+    (base / 'injected.marker').write_text('pid=424242 mode=ok at=0\n', encoding='utf-8', newline='\n')
+    check(run('check') == ['ready', 'present'], 'v12 remains a known shared host')
+    check(run('capture-enable') == ['enabled'], 'v12 capture can be enabled')
+    check(run('capture-status') == ['ready'], 'v12 capture status ready')
+    check(run('capture-disable') == ['disabled'], 'v12 capture can be disabled')
+    check(run('capture-status') == ['disabled'], 'v12 capture status disabled')
+    check(run('breeno-hide') == ['hidden'], 'v12 breeno hide preserved')
+    check(run('breeno-show') == ['shown'], 'v12 breeno show preserved')
+
+    # Explicit install upgrades a compatible v12 host to v13.
+    if (base / 'hook-before-v13.js').exists():
+        (base / 'hook-before-v13.js').unlink()
+    lines = run('install')
+    check(lines == ['ready', 'present'], f'v12 upgrade: {lines}')
+    check((base / 'hook.js').read_bytes() == v13_source, 'v12 install upgraded to v13')
+    check((base / 'hook-before-v13.js').read_bytes()
+          == (project / 'widget-host' / 'WatchHide-Launcher-Hook-v12.js').read_bytes(),
+          'v12 upgrade kept the prior payload')
+    check(run('breeno-hide') == ['hidden'], 'v13 breeno hide')
+    check(run('breeno-show') == ['shown'], 'v13 breeno show')
+
+    # A deployed v13 revision remains usable and upgrades to the current bytes.
+    # Substitute its digest in the fixture rather than shipping old payloads.
+    old_v13 = b'previous supported v13 revision'
+    old_digest = hashlib.sha256(old_v13).hexdigest()
+    for previous in ('aff84e9105a66738234398db5e5beef4fd67b384a804308479cfda472ef349a1',
+                     'fdbf56b324eb29fd37f9d92644b051194503024ea34fcca4b1ddcdd9ecb3d46a',
+                     '46b4ae970215c889e36524c3969b66e45bba45100afd973daae07947f531ea19'):
+        check(previous in control, 'known deployed v13 revision is recognized')
+        (root / 'control.sh').write_text(control.replace(previous, old_digest),
+                                        encoding='utf-8', newline='\n')
+        (base / 'hook.js').write_bytes(old_v13)
+        (root / 'pid').write_text('424242\n', encoding='utf-8', newline='\n')
+        (base / 'injected.marker').write_text('pid=424242 mode=ok at=0\n',
+                                             encoding='utf-8', newline='\n')
+        (base / 'hook-before-v13.js').unlink(missing_ok=True)
+        check(run('capture-enable') == ['enabled'], 'previous v13 can still be enabled')
+        before = snapshot()
+        check(run('capture-status') == ['ready'], 'previous v13 status remains ready')
+        check(snapshot() == before, 'previous v13 status is read-only')
+        check(run('capture-install') == ['ready', 'present'], 'previous v13 upgrades normally')
+        check((base / 'hook.js').read_bytes() == v13_source, 'previous v13 bytes replaced')
+        check((base / 'hook-before-v13.js').read_bytes() == old_v13, 'previous v13 backed up')
+    (root / 'control.sh').write_text(control, encoding='utf-8', newline='\n')
+
+    # install: v10 -> v13, one reload, then keepalive.
     shutil.copyfile(root / 'hook-v10.js', base / 'hook.js')
+    if (base / 'hook-before-v13.js').exists():
+        (base / 'hook-before-v13.js').unlink()
     (base / 'injected.marker').unlink()
     (root / 'pid').write_text('424242\n', encoding='utf-8', newline='\n')
     write_sys(entries)
@@ -234,8 +301,8 @@ with tempfile.TemporaryDirectory(prefix='widget-host-', dir=work) as scratch:
         actions.unlink()
     lines = run('install')
     check(lines == ['ready', 'added'], f'install added: {lines}')
-    check((base / 'hook.js').read_bytes() == (source / 'WatchHide-Launcher-Hook-v12.js').read_bytes(), 'install deployed v12')
-    check((base / 'hook-before-v12.js').read_bytes() == (root / 'hook-v10.js').read_bytes(), 'install kept the v10 backup')
+    check((base / 'hook.js').read_bytes() == (source / 'WatchHide-Launcher-Hook-v13.js').read_bytes(), 'install deployed v13')
+    check((base / 'hook-before-v13.js').read_bytes() == (root / 'hook-v10.js').read_bytes(), 'install kept the v10 backup')
     check(PKG in sys_path().read_text(encoding='utf-8'), 'install added the whitelist entry')
     check('kill -9 424242' in actions.read_text(encoding='utf-8'), 'install reloaded the Launcher')
     check('am start -a android.intent.action.MAIN -c android.intent.category.HOME -p com.heytap.wearable.launcher' in actions.read_text(encoding='utf-8'), 'install requested HOME to restart the background Launcher')
@@ -250,7 +317,7 @@ with tempfile.TemporaryDirectory(prefix='widget-host-', dir=work) as scratch:
         actions.unlink()
     lines = run('install')
     check(lines == ['ready', 'unavailable'], f'install with keepalive failure: {lines}')
-    check((base / 'hook.js').read_bytes() == (source / 'WatchHide-Launcher-Hook-v12.js').read_bytes(), 'keepalive failure kept v12')
+    check((base / 'hook.js').read_bytes() == (source / 'WatchHide-Launcher-Hook-v13.js').read_bytes(), 'keepalive failure kept v13')
     check(not sys_path().exists(), 'keepalive failure did not create the system file')
     check(not backup_path().exists(), 'keepalive failure did not create a backup')
     check('kill -9 424242' in actions.read_text(encoding='utf-8'), 'keepalive failure did not undo the reload')
@@ -265,6 +332,7 @@ with tempfile.TemporaryDirectory(prefix='widget-host-', dir=work) as scratch:
     check(run('capture-status') == ['available'], 'old hook has no capture buttons')
     lines = run('capture-install')
     check(lines == ['ready', 'missing'], f'capture install: {lines}')
+    check((base / 'hook.js').read_bytes() == v13_source, 'capture install deployed v13')
     check(sys_path().read_bytes() == whitelist_before, 'capture install never changes whitelist')
     check(run('capture-status') == ['ready'], 'capture buttons confirmed after attachment')
     actions_before=actions.read_bytes()

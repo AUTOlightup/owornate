@@ -5,35 +5,55 @@ import android.os.Bundle;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 管理器主界面：页面栈、右滑逐级返回、页头、首页和“发现优化”。
  *
  * <p>各功能的页面和状态在 {@link MonetPages}、{@link WidgetPages}、{@link CapturePages}、{@link SystemPages} 里；
- * 这里只负责跳转。首页直接列出已安装的功能，“发现优化”只在还有没装的功能时出现。
+ * 这里只负责跳转。首页直接列出已安装的功能，“发现优化”入口常驻，用于查看接入状态或安装未装功能。
  */
 public final class MainActivity extends WatchActivity {
     /** 只读状态多久内算新鲜：回到首页或从设置页返回时，这段时间内不重复读取。 */
     static final long FRESH_MS = 30_000;
-    private static final HashSet<String> PAGES = new HashSet<>(Arrays.asList(
-            "welcome", "home", "discover", "settings", "check", "guide", "technical", "licenses",
-            "detail", "theme", "theme-more", "theme-restore", "modes", "colors", "install", "uninstall",
-            "progress", "result", "export", "wdetail", "wplan", "widgets"));
+    private final PageRegistry pages = new PageRegistry();
+    /** 发现页/错误提示沿用目录顺序，首页沿用自己的展示顺序。 */
+    private final Map<String, ModuleItem> modules = new LinkedHashMap<>();
+    private List<ModuleItem> homeModules;
+    private List<PluginManifest> localPlugins = new ArrayList<>();
+    private boolean pluginsLoaded, pluginsLoading;
+    private String pluginsError = "";
+
+    private static final class ModuleItem {
+        final ModuleStatusView status;
+        final String title, icon, installedText, errorPrefix;
+        final Runnable openHome, openDiscover;
+
+        ModuleItem(ModuleStatusView status, String title, String icon, String installedText,
+                String errorPrefix, Runnable openHome, Runnable openDiscover) {
+            this.status = status;
+            this.title = title;
+            this.icon = icon;
+            this.installedText = installedText;
+            this.errorPrefix = errorPrefix;
+            this.openHome = openHome;
+            this.openDiscover = openDiscover;
+        }
+    }
 
     final ArrayDeque<String> stack = new ArrayDeque<>();
-    String page = "home";
+    String page = PageIds.HOME;
     SharedPreferences prefs;
     MonetPages monet;
     WidgetPages widgets;
     CapturePages capture;
     SystemPages system;
+    /** 任一入口（其他页面、卡片设置页）发布了新的观察结果：三个模块重新投影后重画。 */
     private final SharedPreferences.OnSharedPreferenceChangeListener runtimeChanged = (store, key) -> {
         if (destroyed()) return;
-        capture.sync();
-        monet.sync();
-        widgets.sync();
+        syncModules();
         render();
     };
 
@@ -44,42 +64,93 @@ public final class MainActivity extends WatchActivity {
         widgets = new WidgetPages(this);
         capture = new CapturePages(this);
         system = new SystemPages(this);
+        registerModules();
+        pages.add(PageIds.HOME, "OWOrnate", this::home);
+        pages.add(PageIds.DISCOVER, "发现优化", this::discover);
+        monet.registerPages(pages);
+        widgets.registerPages(pages);
+        system.registerPages(pages);
+        observeWhileStarted(RuntimeStateStore.preferences(this), runtimeChanged);
         if (saved != null) {
-            page = saved.getString("page", "home");
+            page = saved.getString("page", PageIds.HOME);
             ArrayList<String> restored = saved.getStringArrayList("stack");
             if (restored != null) stack.addAll(restored);
             remember(page, saved.getInt("scroll", 0));
         } else if (!prefs.getBoolean("welcomed", false)) {
-            page = "welcome";
+            page = PageIds.WELCOME;
         }
-        stack.retainAll(PAGES);
+        stack.retainAll(pages.ids());
         // 进行中的操作不会跨进程延续；结果页只在有记录时恢复。
-        if (!PAGES.contains(page) || page.equals("progress") || (page.equals("result") && !monet.hasResult())) {
-            page = "home";
+        if (!pages.contains(page)
+                || page.equals(PageIds.PROGRESS)
+                || (page.equals(PageIds.RESULT) && !monet.hasResult())) {
+            page = PageIds.HOME;
             stack.clear();
         }
         render();
         system.prepareKeys();
+        openPluginSettings(getIntent());
+        SetupCheck.requested(this, getIntent());
     }
 
-    @Override protected void onStart() {
-        super.onStart();
-        RuntimeStateStore.preferences(this).registerOnSharedPreferenceChangeListener(runtimeChanged);
+    @Override protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        openPluginSettings(intent);
+        SetupCheck.requested(this, intent);
     }
 
-    @Override protected void onStop() {
-        RuntimeStateStore.preferences(this).unregisterOnSharedPreferenceChangeListener(runtimeChanged);
-        super.onStop();
+    private void openPluginSettings(android.content.Intent intent) {
+        String feature = intent.getStringExtra("pluginFeature");
+        if ("monet".equals(feature)) go(PageIds.THEME);
+        else if ("widgets".equals(feature)) go(PageIds.WIDGETS);
+    }
+
+    private void registerModules() {
+        ModuleItem monetItem = new ModuleItem(monet, "莫奈取色", "palette", "莫奈取色已安装", "",
+                () -> go(monet.installed() ? PageIds.THEME : PageIds.DETAIL),
+                () -> go(PageIds.DETAIL));
+        ModuleItem widgetItem = new ModuleItem(widgets, "负一屏小组件", "layers", "小组件已接入", "小组件：",
+                () -> go(PageIds.WIDGETS), () -> go(PageIds.WIDGET_DETAIL));
+        ModuleItem captureItem = new ModuleItem(capture, "截屏与录屏", "scan", "截屏与录屏已安装", "截屏与录屏：",
+                capture::open, capture::open);
+        modules.put("monet", monetItem);
+        modules.put("widgets", widgetItem);
+        modules.put("capture", captureItem);
+        homeModules = Arrays.asList(widgetItem, monetItem, captureItem);
     }
 
     @Override protected void onResume() {
         super.onResume();
-        // Other entry points publish into the same store; consume their result before the TTL check.
-        capture.sync();
-        monet.sync();
-        widgets.sync();
+        // 其他入口也会写同一份存储：先接住它们的结果，再按新鲜度决定要不要读。
+        syncModules();
         render();
         refresh(false);
+        loadPlugins();
+    }
+
+    private void loadPlugins() {
+        if (pluginsLoading) return;
+        pluginsLoading = true;
+        inBackground(DeviceQueues.GENERAL, () -> ExternalPlugins.repository(getApplicationContext()).list(),
+                (result, problem) -> {
+            pluginsLoading = false;
+            pluginsLoaded = problem == null;
+            pluginsError = problem == null ? "" : message(problem);
+            if (problem == null) localPlugins = result;
+            render();
+        });
+    }
+
+    private void openPlugin(String id) {
+        startActivity(new android.content.Intent(this, PluginActivity.class).putExtra("pluginId", id));
+    }
+
+    private PluginManifest importedFeature(ModuleItem item) {
+        for (PluginManifest plugin : localPlugins) {
+            if (!plugin.feature().isEmpty() && modules.get(plugin.feature()) == item) return plugin;
+        }
+        return null;
     }
 
     @Override protected void onSaveInstanceState(Bundle b) {
@@ -89,9 +160,15 @@ public final class MainActivity extends WatchActivity {
         b.putInt("scroll", scrollY());
     }
 
+    private void syncModules() {
+        capture.sync();
+        monet.sync();
+        widgets.sync();
+    }
+
     /** 读三类只读状态；force=false 时距上次成功读取不到 {@link #FRESH_MS} 就跳过。 */
     void refresh(boolean force) {
-        // Fixed order keeps the three independent reads from skipping one another.
+        // 顺序固定：莫奈开始读取后会计入 working()，放在最后才不会让另外两个跳过。
         capture.refresh(force);
         widgets.refresh(force);
         monet.refresh(force);
@@ -101,32 +178,53 @@ public final class MainActivity extends WatchActivity {
         return monet.working() || widgets.busy() || system.busy();
     }
 
+    boolean anyRefreshing() {
+        for (ModuleItem item : modules.values()) {
+            if (item.status.refreshing()) return true;
+        }
+        return false;
+    }
+
+    boolean anyReadFailed() {
+        for (ModuleItem item : modules.values()) {
+            if (item.status.failed()) return true;
+        }
+        return false;
+    }
+
+    /** 各模块本次读取失败的原因，一条一张说明卡。tone 为空时用中性色。 */
+    void readErrorNotes(String tone) {
+        for (ModuleItem item : modules.values()) {
+            if (item.status.failed()) ui.note(item.errorPrefix + item.status.error(), tone);
+        }
+    }
+
     @Override public void onBackPressed() {
-        if (page.equals("progress") || widgets.blocksBack(page)) return;
-        if (page.equals("result")) {
+        if (page.equals(PageIds.PROGRESS) || widgets.blocksBack(page)) return;
+        if (page.equals(PageIds.RESULT)) {
             monet.finishResult();
             return;
         }
         if (stack.isEmpty()) {
-            if (page.equals("home") || page.equals("welcome")) finish();
+            if (page.equals(PageIds.HOME) || page.equals(PageIds.WELCOME)) finish();
             else returnHome();
             return;
         }
         page = stack.pop();
         render();
-        if (page.equals("home")) refresh(false);
+        if (page.equals(PageIds.HOME)) refresh(false);
     }
 
     void go(String target) {
-        if (page.equals("progress")) return;
+        if (page.equals(PageIds.PROGRESS)) return;
         if (stack.contains(target)) {
             while (!stack.pop().equals(target)) { }
         } else if (!page.equals(target)) {
-            stack.push(page.equals("welcome") ? "home" : page);
+            stack.push(page.equals(PageIds.WELCOME) ? PageIds.HOME : page);
         }
         page = target;
         render();
-        if (target.equals("theme")) monet.enterTheme();
+        if (target.equals(PageIds.THEME)) monet.enterTheme();
     }
 
     /** 直接落到 target，并给它补上合理的上一级（结果页结束时用）。 */
@@ -135,8 +233,8 @@ public final class MainActivity extends WatchActivity {
             while (!stack.pop().equals(target)) { }
         } else {
             stack.clear();
-            if (!target.equals("home")) stack.push("home");
-            if (target.equals("detail")) stack.push("discover");
+            if (!target.equals(PageIds.HOME)) stack.push(PageIds.HOME);
+            if (target.equals(PageIds.DETAIL)) stack.push(PageIds.DISCOVER);
         }
         page = target;
         remember(target, 0);
@@ -149,7 +247,7 @@ public final class MainActivity extends WatchActivity {
             stack.remove(target);
             return;
         }
-        page = stack.isEmpty() ? "home" : stack.pop();
+        page = stack.isEmpty() ? PageIds.HOME : stack.pop();
         render();
     }
 
@@ -162,89 +260,100 @@ public final class MainActivity extends WatchActivity {
 
     void returnHome() {
         stack.clear();
-        page = "home";
-        remember("home", 0);
+        page = PageIds.HOME;
+        remember(PageIds.HOME, 0);
         render();
         refresh(false);
     }
 
     void render() {
         rebuild(page, () -> {
-            boolean root = page.equals("home") || page.equals("welcome") || page.equals("progress");
-            if (page.equals("theme")) monet.themeHeader();
+            boolean root = page.equals(PageIds.HOME) || page.equals(PageIds.WELCOME) || page.equals(PageIds.PROGRESS);
+            ModuleManagement management = pages.management(page);
+            if (management != null) ModuleManagementUi.header(ui, this::onBackPressed, management);
             else ui.header(title(), root, root ? null : this::onBackPressed,
-                    page.equals("home") ? () -> go("settings") : null);
-            if (page.equals("home")) home();
-            else if (page.equals("discover")) discover();
-            else if (!monet.render(page) && !widgets.render(page) && !system.render(page)) home();
+                    page.equals(PageIds.HOME) ? () -> go(PageIds.SETTINGS) : null);
+            if (!pages.render(page)) home();
         });
     }
 
     private String title() {
-        if (page.equals("home") || page.equals("welcome")) return "OWOrnate";
-        if (page.equals("discover")) return "发现优化";
-        String title = monet.title(page);
-        if (title == null) title = widgets.title(page);
-        if (title == null) title = system.title(page);
+        String title = pages.title(page);
         return title == null ? "OWOrnate" : title;
     }
 
-    /** 首页保留需要检查的功能入口；只有确认可安装的功能计入可安装数量。 */
+    /** 首页列出已安装功能并保留检查入口；「发现优化」入口常驻，可安装数量仅统计确认可装的功能。 */
     private void home() {
-        boolean monetOn = monet.installed(), widgetsOn = widgets.on(), captureOn = capture.installed();
-        Integer count = monet.known() && widgets.known() && capture.known()
-                ? (monetOn ? 1 : 0) + (widgetsOn ? 1 : 0) + (captureOn ? 1 : 0) : null;
-        String status;
-        if (monet.failed() || widgets.failed() || capture.failed()) status = "部分状态读取失败";
-        else if (monet.incompatible()) status = "莫奈组件不兼容，请检查环境";
-        else if (monet.needsSetup()) status = "莫奈管理通道需要检查";
-        else if (count == null) status = monet.refreshing() || widgets.refreshing() || capture.refreshing()
-                ? "正在确认状态" : "状态待确认";
-        else if (count == 0) status = "尚未安装任何功能";
-        else {
-            ArrayList<String> parts = new ArrayList<>();
-            if (widgetsOn) parts.add("小组件已接入");
-            if (monetOn) parts.add("莫奈取色已安装");
-            if (captureOn) parts.add("截屏与录屏已安装");
-            status = String.join(" · ", parts);
+        boolean allKnown = pluginsLoaded;
+        int installed = 0;
+        for (PluginManifest plugin : localPlugins) {
+            ModuleItem nativeModule = modules.get(plugin.feature());
+            if (nativeModule == null || !nativeModule.status.installed()) installed++;
         }
-        ui.summary(count, "项功能，已纳入管理", status);
-        if (widgetsOn) widgets.homeRow();
-        if (monetOn || monet.incompatible() || monet.needsSetup()) monet.homeRow();
-        if (captureOn || capture.failed()) capture.homeRow();
-        if (monet.failed()) {
-            ui.note(monet.error(), "warning");
+        for (ModuleItem item : modules.values()) {
+            allKnown &= item.status.known();
+            if (item.status.installed()) installed++;
         }
-        if (widgets.failed()) {
-            ui.note("小组件：" + widgets.error(), "warning");
+        Integer count = allKnown ? Integer.valueOf(installed) : null;
+        ui.summary(count, "项功能，已纳入管理", homeStatus(count));
+        for (ModuleItem item : homeModules) {
+            if (item.status.showOnHome()) {
+                PluginManifest imported = importedFeature(item);
+                ui.row(item.title, item.status.homeLine()
+                        + (imported == null ? "" : " · 本地包 " + imported.versionName),
+                        item.icon, imported == null ? item.openHome : () -> openPlugin(imported.id));
+            }
         }
-        if (capture.failed()) {
-            ui.note("截屏与录屏：" + capture.error(), "warning");
+        readErrorNotes("warning");
+        for (PluginManifest plugin : localPlugins) {
+            ModuleItem nativeModule = modules.get(plugin.feature());
+            if (nativeModule != null && nativeModule.status.showOnHome()) continue;
+            ui.row(plugin.name, "本地插件 · " + plugin.versionName, "layers", () -> openPlugin(plugin.id));
         }
-        if (monet.failed() || widgets.failed() || capture.failed()) {
-            ui.button("重新读取状态", false, !working(), () -> refresh(true));
+        if (!pluginsError.isEmpty()) {
+            ui.note("本地插件列表读取失败：" + pluginsError, "warning");
+            ui.button("重新读取插件列表", false, !pluginsLoading, this::loadPlugins);
         }
-        if (!(monetOn && widgetsOn && captureOn)) {
-            int available = (monet.available() ? 1 : 0) + (widgets.available() ? 1 : 0)
-                    + (capture.available() ? 1 : 0);
-            ui.row("发现优化", available > 0 ? "还有 " + available + " 项可安装" : "查看功能与接入状态", "compass", () -> go("discover"));
+        if (anyReadFailed()) ui.button("重新读取状态", false, !working(), () -> refresh(true));
+        // 「发现优化」常驻：即使所有功能都已安装，仍保留入口以便查看接入状态或重新接入。
+        int available = 0;
+        for (ModuleItem item : modules.values()) {
+            if (item.status.available()) available++;
         }
+        ui.row("发现优化",
+                available > 0 ? "还有 " + available + " 项可安装" : "查看功能与接入状态",
+                "compass", () -> go(PageIds.DISCOVER));
+    }
+
+    /** 概览卡的一行状态：读取问题优先，其次列出已装的功能。 */
+    private String homeStatus(Integer count) {
+        if (anyReadFailed() || !pluginsError.isEmpty()) return "部分状态读取失败";
+        for (ModuleItem item : modules.values()) {
+            String warning = item.status.homeWarning();
+            if (!warning.isEmpty()) return warning;
+        }
+        if (count == null) return anyRefreshing() ? "正在确认状态" : "状态待确认";
+        if (count == 0) return "尚未安装任何功能";
+        ArrayList<String> parts = new ArrayList<>();
+        for (ModuleItem item : homeModules) {
+            if (item.status.installed()) parts.add(item.installedText);
+        }
+        if (!localPlugins.isEmpty()) parts.add(localPlugins.size() + " 个本地插件");
+        return String.join(" · ", parts);
     }
 
     private void discover() {
-        List<ModuleCatalog.Entry> catalog = ModuleCatalog.sorted(Arrays.asList(
-                new ModuleCatalog.Entry("monet", "莫奈取色", monet.installed()),
-                new ModuleCatalog.Entry("widgets", "负一屏小组件", widgets.on()),
-                new ModuleCatalog.Entry("capture", "截屏与录屏", capture.installed())));
-        for (ModuleCatalog.Entry item : catalog) {
-            if ("widgets".equals(item.id)) {
-                ui.row(item.title, widgets.discoverLine(),
-                        "layers", () -> go("wdetail"));
-            } else if ("capture".equals(item.id)) {
-                ui.row(item.title, capture.discoverLine(), "scan", capture::open);
-            } else {
-                ui.row(item.title, monet.discoverLine(), "palette", () -> go("detail"));
-            }
+        ui.row("本地插件", "导入插件包与管理已导入插件", "layers", () -> openPlugin(""));
+        List<ModuleCatalog.Entry> catalog = new ArrayList<>();
+        for (Map.Entry<String, ModuleItem> entry : modules.entrySet()) {
+            ModuleItem item = entry.getValue();
+            catalog.add(new ModuleCatalog.Entry(entry.getKey(), item.title, item.status.installed()));
+        }
+        for (ModuleCatalog.Entry entry : ModuleCatalog.sorted(catalog)) {
+            ModuleItem item = modules.get(entry.id);
+            PluginManifest imported = importedFeature(item);
+            ui.row(item.title, item.status.discoverLine(), item.icon,
+                    imported == null ? item.openDiscover : () -> openPlugin(imported.id));
         }
     }
 }

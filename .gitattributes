@@ -3,3 +3,7 @@
 /widget-host/** -text
 /standalone/** -text
 /capture/** -text
+/plugins/examples/**/plugin.sh text eol=lf
+/plugins/examples/**/hook.js text eol=lf
+/plugins/launcher/**/hook.js text eol=lf
+/plugins/launcher/**/theme.jar -text

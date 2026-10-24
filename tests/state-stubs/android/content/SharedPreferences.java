@@ -13,6 +13,7 @@ public interface SharedPreferences {
         Editor putString(String key, String value);
         Editor putBoolean(String key, boolean value);
         Editor putInt(String key, int value);
+        Editor putLong(String key, long value);
         Editor remove(String key);
         Editor clear();
         boolean commit();
@@ -27,6 +28,7 @@ public interface SharedPreferences {
     String getString(String key, String defaultValue);
     boolean getBoolean(String key, boolean defaultValue);
     int getInt(String key, int defaultValue);
+    long getLong(String key, long defaultValue);
     boolean contains(String key);
     Editor edit();
     void registerOnSharedPreferenceChangeListener(OnSharedPreferenceChangeListener listener);
@@ -54,6 +56,11 @@ final class InMemorySharedPreferences implements SharedPreferences {
     @Override public synchronized int getInt(String key, int defaultValue) {
         Object value = values.get(key);
         return value instanceof Number ? ((Number) value).intValue() : defaultValue;
+    }
+
+    @Override public synchronized long getLong(String key, long defaultValue) {
+        Object value = values.get(key);
+        return value instanceof Number ? ((Number) value).longValue() : defaultValue;
     }
 
     @Override public synchronized boolean contains(String key) {
@@ -92,6 +99,12 @@ final class InMemorySharedPreferences implements SharedPreferences {
         }
 
         @Override public Editor putInt(String key, int value) {
+            pending.put(key, value);
+            removed.remove(key);
+            return this;
+        }
+
+        @Override public Editor putLong(String key, long value) {
             pending.put(key, value);
             removed.remove(key);
             return this;

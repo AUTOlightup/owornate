@@ -88,7 +88,7 @@ param(
 $ErrorActionPreference = 'Stop'
 # Ship the same fixed widget-host payload used by the desktop fallback.
 New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'assets/widget-host') | Out-Null
-foreach($name in @('widget-manage.sh','WatchHide-Launcher-Hook-v12.js')) {
+foreach($name in @('widget-manage.sh','WatchHide-Launcher-Hook-v13.js')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "widget-host/$name") -Destination (Join-Path $PSScriptRoot "assets/widget-host/$name")
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'assets/capture') | Out-Null
@@ -414,18 +414,26 @@ if ($javaSources.Count -eq 0) {
     throw ('未找到 Java 源码（' + $SrcDir + '\dev\codex\watchworkshop\*.java）。')
 }
 
-# The watch installs Monet from the signed APK. Keep the readable scripts as the source.
+# The APK carries only the self-owned coordinator; feature payloads come from imported packages.
 $moduleAssets=Join-Path $AssetsDir 'monet'
-foreach($scriptName in @('hook.js','monet-service.sh','module-manage.sh')){
+$runtimeControl = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'standalone/runtime-manage.sh'))
+foreach ($pin in @(@{Name='runtime-core.js'; Key='CORE_SHA'}, @{Name='runtime-commit.js'; Key='COMMIT_SHA'}, @{Name='runtime-service.sh'; Key='SERVICE_SHA'})) {
+    $digest = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('standalone/' + $pin.Name)) -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($runtimeControl -notmatch ('(?m)^' + $pin.Key + '=' + $digest + '\r?$')) {
+        throw ('Runtime payload pin does not match: ' + $pin.Name)
+    }
+}
+foreach($scriptName in @('module-manage.sh','runtime-core.js','runtime-commit.js','runtime-service.sh','runtime-manage.sh')){
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "standalone/$scriptName") -Destination (Join-Path $moduleAssets $scriptName) -Force
 }
-if((Get-FileHash -LiteralPath (Join-Path $moduleAssets 'theme.jar') -Algorithm SHA256).Hash.ToLowerInvariant() -ne '706205ab96a67bfca062bca5152f89fe7cfaddc5ed9db2fe121d1697723dca74'){
-    throw 'APK内置theme.jar与协议适配版本不符。'
-}
-
 Copy-Item -LiteralPath $Manifest -Destination $stageManifest -Force
 Copy-Item -LiteralPath $ResDir -Destination $stageInput -Recurse -Force
 Copy-Item -LiteralPath $AssetsDir -Destination $stageInput -Recurse -Force
+# Historical payloads remain in the source checkout for compatibility tests, not in new APKs.
+foreach($legacy in @('runtime-hook.js','theme.jar','hook.js','monet-service.sh')){
+    $stagedLegacy=Join-Path $stageAssets ('monet/'+$legacy)
+    if(Test-Path -LiteralPath $stagedLegacy){Remove-Item -LiteralPath $stagedLegacy -Force}
+}
 
 # ---------------------------------------------------------------------------
 # 4. 资源编译 + 链接（aapt2，全程 ASCII 路径）
