@@ -1,5 +1,11 @@
 # 版本记录
 
+## 1.0.1-rc27 / versionCode 36 — 界面美化与发现分组
+
+本版统一管理器界面，精简主页与导航文案，发现页在同一界面按“未安装／已安装”分组，本地插件位于已安装首位。已安装条目显示实际版本；小组件设置、课表与录屏画质页使用统一样式。实际负一屏小组件的布局与配色保持。
+
+包含此前本机 code33–35 的文案精简、发现分组及初稿优化，首次随 code36 对外发布。主要界面已装表查看，数据与实际小组件样式保留。运行载荷及三个官方插件版本不变。验证边界见 VALIDATION.md。
+
 ## 1.0.1-rc23 / versionCode 32 — A.92 安装来源授权回退（已公开发布）
 
 - A.92 上普通应用直接启动 `MANAGE_UNKNOWN_APP_SOURCES` 会遇到 `Settings$ManageAppExternalSourcesActivity not exported`。`UpdateActivity` 现在仅在 `ActivityNotFoundException` 或 `SecurityException` 时回退标准 `ACTION_APPLICATION_DETAILS_SETTINGS` 应用信息页，并显示明确说明。

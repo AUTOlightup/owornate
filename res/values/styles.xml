@@ -2,7 +2,7 @@
 <!--
   腕上工坊 应用主题：黑底、无 ActionBar。
   语义色取自 outputs/腕上工坊-界面设计/设计变量.json：
-  accent #EBC16C / textPrimary #F0F3FA / textSecondary #A4AEC0 / textTertiary #748095
+  accent #F1C779 / textPrimary #F4F1EB / textSecondary #ADB2BA / textTertiary #838A95
   仅使用 android:* 原生属性，避免任何 support/androidx 依赖。
 -->
 <resources>
@@ -21,14 +21,14 @@
         <!-- 主色与强调色 -->
         <item name="android:colorPrimary">@android:color/black</item>
         <item name="android:colorPrimaryDark">@android:color/black</item>
-        <item name="android:colorBackgroundFloating">#12161E</item>
-        <item name="android:colorAccent">#EBC16C</item>
+        <item name="android:colorBackgroundFloating">#15181C</item>
+        <item name="android:colorAccent">#F1C779</item>
 
         <!-- 文本层级 -->
-        <item name="android:textColorPrimary">#F0F3FA</item>
-        <item name="android:textColorSecondary">#A4AEC0</item>
-        <item name="android:textColorTertiary">#748095</item>
-        <item name="android:textColorHint">#748095</item>
+        <item name="android:textColorPrimary">#F4F1EB</item>
+        <item name="android:textColorSecondary">#ADB2BA</item>
+        <item name="android:textColorTertiary">#838A95</item>
+        <item name="android:textColorHint">#838A95</item>
 
         <!-- 无标题栏、无 ActionBar -->
         <item name="android:windowActionBar">false</item>

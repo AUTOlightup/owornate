@@ -39,7 +39,11 @@ public final class WheelPicker extends View {
     private final OverScroller scroller;
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint band = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint bandEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF bandRect = new RectF();
+    private final Typeface selectedFace;
+    private final Typeface itemFace;
+    private final float bandRadius;
 
     private String[] items = new String[0];
     private boolean circular;
@@ -59,18 +63,25 @@ public final class WheelPicker extends View {
         super(context);
         this.name = name;
         float density = context.getResources().getDisplayMetrics().density;
-        itemHeight = Math.round(32 * density);
         baseSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16,
                 context.getResources().getDisplayMetrics());
+        itemHeight = Math.max(Math.round(32 * density), Math.round(baseSize * 1.6f));
+        selectedFace = Typeface.create("sans-serif-medium", Typeface.NORMAL);
+        itemFace = Typeface.SANS_SERIF;
         ViewConfiguration config = ViewConfiguration.get(context);
         touchSlop = config.getScaledTouchSlop();
         minFling = config.getScaledMinimumFlingVelocity();
         maxFling = config.getScaledMaximumFlingVelocity();
         scroller = new OverScroller(context);
         text.setTextAlign(Paint.Align.CENTER);
-        text.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         text.setFontFeatureSettings("tnum");
-        band.setColor(WorkshopUi.SOFT);
+        band.setColor(WorkshopUi.ACCENT_SURFACE);
+        bandEdge.setStyle(Paint.Style.STROKE);
+        bandEdge.setStrokeWidth(Math.max(1f, density * 0.5f));
+        bandEdge.setColor(WorkshopUi.SELECT_RING);
+        bandRadius = Math.min(itemHeight * 0.34f,
+                TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, WorkshopUi.NOTE_RADIUS,
+                        context.getResources().getDisplayMetrics()));
         setFocusable(true);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
     }
@@ -129,10 +140,12 @@ public final class WheelPicker extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         int w = getWidth();
+        float available = Math.max(1f, w - 8 * getResources().getDisplayMetrics().density);
         float cy = getHeight() / 2f;
         float inset = itemHeight * 0.06f;
         bandRect.set(inset, cy - itemHeight / 2f + inset, w - inset, cy + itemHeight / 2f - inset);
-        canvas.drawRoundRect(bandRect, itemHeight * 0.3f, itemHeight * 0.3f, band);
+        canvas.drawRoundRect(bandRect, bandRadius, bandRadius, band);
+        canvas.drawRoundRect(bandRect, bandRadius, bandRadius, bandEdge);
         int n = items.length;
         if (n == 0) return;
         float pos = scrollY / itemHeight;
@@ -146,11 +159,17 @@ public final class WheelPicker extends View {
             if (distance > ROWS / 2f + 0.5f) continue;
             float scale = 1f - 0.10f * Math.min(distance, 2.5f);
             int alpha = (int) (255 * Math.max(0.12f, 1f - 0.36f * distance));
+            boolean selected = distance < 0.5f;
             text.setTextSize(baseSize * scale);
-            text.setColor(distance < 0.5f ? WorkshopUi.FG : WorkshopUi.MUTED);
+            text.setTypeface(selected ? selectedFace : itemFace);
+            String label = items[Math.floorMod(i, n)];
+            float measured = text.measureText(label);
+            if (measured > available) text.setTextSize(text.getTextSize() * available / measured);
+            text.setColor(selected ? WorkshopUi.ACCENT
+                    : (distance < 1.5f ? WorkshopUi.FG : WorkshopUi.MUTED));
             text.setAlpha(alpha);
             float y = cy + d * itemHeight - (text.ascent() + text.descent()) / 2f;
-            canvas.drawText(items[Math.floorMod(i, n)], w / 2f, y, text);
+            canvas.drawText(label, w / 2f, y, text);
         }
     }
 

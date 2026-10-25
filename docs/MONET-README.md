@@ -1,5 +1,7 @@
 # OWOrnate · Monet helper 源码
 
+**2026-10-25 更新：管理器 1.0.1-rc27 / code36。** 本版调整管理器界面，运行 Hook、helper v6 与插件版本保持。构建与原生产表同签覆盖通过，实际小组件不改；验证边界以 [VALIDATION.md](https://github.com/AUTOlightup/owornate/blob/v1.0.1-rc27/docs/VALIDATION.md) 首部为准。下文旧版本状态保留为历史记录。
+
 本包（`watch2-monet-source`）只包含控制中心莫奈取色的 helper 与运行时源码，用于审计和重建 `theme.jar`/运行时片段。它不包含管理器 App、Frida 二进制、预制 keys 或 OPPO APK 素材，不能单独完成整机部署。
 
 ## 目录

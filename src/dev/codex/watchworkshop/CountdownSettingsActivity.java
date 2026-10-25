@@ -244,8 +244,8 @@ public final class CountdownSettingsActivity extends WatchActivity {
         previewBox = preview(() -> CountdownWidgetProvider.preview(this, source, draft()));
 
         ui.title("数据来源");
-        ui.choice("自己设置", "在这里填写标题和日期", !source.anniversary, () -> pickSource(false));
-        ui.choice("纪念日", "显示纪念日应用里的日子", source.anniversary, () -> pickSource(true));
+        ui.choice("手动设置", "", !source.anniversary, () -> pickSource(false));
+        ui.choice("纪念日", "读取纪念日应用", source.anniversary, () -> pickSource(true));
         if (source.anniversary) {
             anniversary();
         } else {
@@ -292,7 +292,7 @@ public final class CountdownSettingsActivity extends WatchActivity {
                 });
             }
         }
-        ui.note("返回时自动保存，负一屏上的倒计时卡片随之更新。");
+        ui.caption("返回时自动保存并更新卡片。");
     }
 
     /** 纪念日模式：读取状态、选哪一条、这一条的显示方式，以及打开纪念日。 */

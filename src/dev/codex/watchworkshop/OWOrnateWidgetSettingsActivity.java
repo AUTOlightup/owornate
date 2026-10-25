@@ -102,17 +102,17 @@ public final class OWOrnateWidgetSettingsActivity extends WatchActivity {
     }
 
     private void edit() {
-        ui.header("OWOrnate 信息", false, this::onBackPressed, null);
+        ui.header("信息卡片", false, this::onBackPressed, null);
         preview(() -> OWOrnateWidgetProvider.render(this, NO_CARD));
         if (!error.isEmpty()) ui.note(error, "danger");
-        ui.title("卡片显示项");
-        ui.toggle("显示状态", "卡片显示上次确认的状态", showStatus,
+        ui.title("显示内容");
+        ui.toggle("显示状态", "", showStatus,
                 () -> apply(!showStatus, showTheme, showVersion));
-        ui.toggle("显示主题", "卡片显示上次确认的配色", showTheme,
+        ui.toggle("显示主题", "", showTheme,
                 () -> apply(showStatus, !showTheme, showVersion));
-        ui.toggle("显示版本", "卡片显示 OWOrnate 版本", showVersion,
+        ui.toggle("显示版本", "", showVersion,
                 () -> apply(showStatus, showTheme, !showVersion));
-        ui.note("切换后立即生效。状态和主题与管理器共用上次确认结果；不会自动轮询手表。");
+        ui.caption("修改即时生效。状态与配色显示上次确认结果。");
         ui.button(reading ? "正在读取…" : "读取最新状态", false, !reading, this::readLatest);
         if (!readNote.isEmpty()) ui.note(readNote, readFailed ? "danger" : "");
     }

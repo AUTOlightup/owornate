@@ -43,7 +43,7 @@ public final class CaptureOptionsActivity extends WatchActivity {
     private String readError = "";
     private String settingError = "";
     private String saveError = "";
-    private TextView qualityTitle, summary, problem, primary;
+    private TextView summary, problem, primary;
     private final SharedPreferences.OnSharedPreferenceChangeListener runtimeChanged = (store, key) -> {
         if (!destroyed() && !isFinishing() && CaptureManager.statusKey(key)) updateState();
     };
@@ -62,11 +62,12 @@ public final class CaptureOptionsActivity extends WatchActivity {
         screenHeight = metrics.heightPixels;
         details = saved != null && saved.getBoolean("details");
         if (saved != null) remember(details ? "record-details" : "record", saved.getInt("scroll", 0));
-        body.setPadding(dp(8), dp(4), dp(8), 0);
+        body.setPadding(dp(WorkshopUi.PAGE_SIDE), dp(WorkshopUi.PAGE_TOP),
+                dp(WorkshopUi.PAGE_SIDE), dp(4));
         LinearLayout footer = new LinearLayout(this);
         footer.setOrientation(LinearLayout.VERTICAL);
-        footer.setPadding(dp(8), 0, dp(8), dp(6));
         primary = new WorkshopUi(this, footer).button("正在确认状态…", true, this::primaryAction);
+        ((LinearLayout.LayoutParams) primary.getLayoutParams()).bottomMargin = 0;
         pinBelowContent(footer);
         showPage();
     }
@@ -172,10 +173,9 @@ public final class CaptureOptionsActivity extends WatchActivity {
 
     private void showPage() {
         rebuild(details ? "record-details" : "record", () -> {
-            ui.header(details ? "录屏说明" : "录屏", false, this::onBackPressed, null);
-            problem = ui.text("");
-            problem.setTextSize(11);
-            problem.setTextColor(WorkshopUi.WARNING);
+            ui.header(details ? "录屏说明" : setting == null ? "录屏画质" : setting.title,
+                    false, this::onBackPressed, null);
+            problem = ui.note("", "warning");
             if (details) detailsPage();
             else qualityPage();
         });
@@ -196,7 +196,6 @@ public final class CaptureOptionsActivity extends WatchActivity {
 
     /** 三档画质横排一行，下面是码率说明和“更多说明”。 */
     private void qualityPage() {
-        qualityTitle = ui.title(setting == null ? "画质设置" : setting.title);
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         quality = new TextView[rates.length];
@@ -210,15 +209,15 @@ public final class CaptureOptionsActivity extends WatchActivity {
         if (rates.length > 0) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.bottomMargin = dp(6);
+            lp.bottomMargin = dp(WorkshopUi.GAP);
             body.addView(row, lp);
         }
-        summary = ui.text("");
-        summary.setTextSize(11);
-        ui.button("更多说明", false, () -> {
+        summary = ui.caption("");
+        View more = ui.row("更多说明", "", "info", () -> {
             details = true;
             showPage();
         });
+        ((LinearLayout.LayoutParams) more.getLayoutParams()).bottomMargin = 0;
         updateQuality();
     }
 
@@ -227,11 +226,11 @@ public final class CaptureOptionsActivity extends WatchActivity {
         boolean active = active();
         String label = primaryLabel(active);
         primary.setText(label);
-        primary.setContentDescription(label);
         boolean enabled = !pendingStart && !reading && (statusConfirmed || !readError.isEmpty())
                 && (active || settingError.isEmpty());
         primary.setEnabled(enabled);
         primary.setAlpha(enabled ? 1f : 0.45f);
+        primary.setContentDescription(label + (enabled ? "" : "，暂不可执行"));
         if (!details && summary != null) {
             if (!settingError.isEmpty() && !active) {
                 summary.setText("画质设置不可用，暂不能开始录屏");
@@ -282,20 +281,22 @@ public final class CaptureOptionsActivity extends WatchActivity {
         boolean editable = !pendingStart && settingError.isEmpty();
         for (int i = 0; i < quality.length && i < rates.length; i++) {
             boolean selected = bitrate == rates[i];
-            GradientDrawable background = new GradientDrawable();
-            background.setCornerRadius(dp(WorkshopUi.BTN_RADIUS));
-            background.setColor(selected ? WorkshopUi.ACCENT : WorkshopUi.SOFT);
-            quality[i].setBackground(new RippleDrawable(ColorStateList.valueOf(0x33ffffff), background, null));
-            quality[i].setTextColor(selected ? WorkshopUi.ON_ACCENT : WorkshopUi.FG);
+            GradientDrawable background = shape(selected ? WorkshopUi.ACCENT_SURFACE : WorkshopUi.SURFACE,
+                    WorkshopUi.BTN_RADIUS);
+            background.setStroke(selected ? dp(1) : Math.max(1, dp(0.5f)),
+                    selected ? WorkshopUi.SELECT_RING : WorkshopUi.OUTLINE);
+            quality[i].setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff), background,
+                    shape(0xffffffff, WorkshopUi.BTN_RADIUS)));
+            quality[i].setTextColor(selected ? WorkshopUi.ACCENT : WorkshopUi.FG);
             quality[i].setSelected(selected);
             quality[i].setEnabled(editable);
             quality[i].setAlpha(editable ? 1f : 0.45f);
             quality[i].setContentDescription(quality[i].getText() + "，" + (rates[i] / 1000000f) + " Mbps"
-                    + (selected ? "，已选择" : ""));
+                    + (selected ? "，已选择" : "") + (editable ? "" : "，暂不可选"));
         }
     }
 
-    /** 重新读取插件声明和保存值；返回 true 表示按钮文字或顺序发生了变化。 */
+    /** 重新读取插件声明和保存值；返回 true 表示标题、按钮文字或顺序发生了变化。 */
     private boolean reloadQuality() {
         final QualityState next;
         try {
@@ -304,7 +305,8 @@ public final class CaptureOptionsActivity extends WatchActivity {
             settingError = message(failure);
             return false;
         }
-        boolean structureChanged = !Arrays.equals(rates, next.rates)
+        boolean structureChanged = setting == null || !setting.title.equals(next.setting.title)
+                || !Arrays.equals(rates, next.rates)
                 || !Arrays.equals(rateLabels, next.labels);
         setting = next.setting;
         rates = next.rates;
@@ -312,7 +314,6 @@ public final class CaptureOptionsActivity extends WatchActivity {
         bitrate = next.choice;
         settingError = "";
         saveError = "";
-        if (qualityTitle != null) qualityTitle.setText(setting.title);
         return structureChanged;
     }
 

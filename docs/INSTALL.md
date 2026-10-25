@@ -1,6 +1,6 @@
 # 安装、首次设置与插件导入
 
-**当前公开版本：1.0.1-rc23 / code32，发布于 2026-10-24 23:59（UTC+8）。** 本版修复 A.92 上普通应用无法直接启动 `MANAGE_UNKNOWN_APP_SOURCES` 设置页的问题：只在 `ActivityNotFoundException` 或 `SecurityException` 时回退标准应用信息页，并要求用户手动打开“允许来自此来源的应用”。授权和系统安装确认都不自动完成。launcher-v1 继续使用 code30 的第三方接口与 v4 运行环境；共享 WatchHide 环境不部署第三方 Hook。Launcher 插件协议见同一文档目录中的 `LAUNCHER-PLUGINS.md`，验收边界见 [验证记录](VALIDATION.md)。
+**当前版本：1.0.1-rc27 / code36。** 本版更新管理器界面，沿用既有首次设置、插件导入和手动安装来源授权流程。运行载荷、三个官方包及实际小组件 UI 保持。验证范围见 [验证记录](VALIDATION.md)。
 
 ## 适用范围
 
@@ -8,14 +8,14 @@ OPPO Watch 2 46mm / OW20W1 / A.92 / API27 / armeabi-v7a，已有 root adbd。安
 
 launcher-v1 保留莫奈、小组件、捕获三个官方接口，并接受第三方两文件 Hook 包；尚未提供自定义原生 Activity、服务或设置页 SDK。普通 root 脚本继续使用 shell-v1，协议见 [本地插件开发](PLUGIN-DEVELOPMENT.md)。
 
-## 候选分发内容
+## 正式分发内容
 
-本次 rc23 候选维持 9 个顶层正式附件：管理器 APK、Windows 包、管理器源码包、莫奈 helper 源码包、三个官方 `.owo`、`owornate-updates.json` 和 `SHA256SUMS.txt`。文件名随 rc23 重命名，三个官方包版本不变。实际归档和摘要核对属于发布流程；文件名与验收边界见 [GitHub 发布说明](GITHUB-RELEASE.md)。
+本次 rc27 正式维持 9 个顶层正式附件：管理器 APK、Windows 包、管理器源码包、莫奈 helper 源码包、三个官方 `.owo`、`owornate-updates.json` 和 `SHA256SUMS.txt`。文件名随 rc27 重命名，三个官方包版本不变。实际归档和摘要核对属于发布流程；文件名与验收边界见 [GitHub 发布说明](GITHUB-RELEASE.md)。
 
 Windows 包完整解压后包含：
 
 ```text
-OWOrnate-v1.0.1-rc23-Windows/
+OWOrnate-v1.0.1-rc27-Windows/
   00-Setup.cmd
   01-Status.cmd
   02-EnableWidgets.cmd
@@ -25,7 +25,7 @@ OWOrnate-v1.0.1-rc23-Windows/
   docs/
   licenses/
   tools/adb/
-  payload/OWOrnate-v1.0.1-rc23.apk
+  payload/OWOrnate-v1.0.1-rc27.apk
   payload/frida-inject
   payload/plugins/monet-1.1.0.owo
   payload/plugins/widgets-1.0.0.owo
@@ -36,7 +36,7 @@ OWOrnate-v1.0.1-rc23-Windows/
 
 `plugins/examples/launcher-keep-awake/` 提供第三方示例源码和可直接导入的 `launcher-keep-awake-1.0.1.owo`。该示例不占顶层正式附件，也不进入官方更新清单。插件创建、校验、打包和独立清单工具只随完整管理器源码包提供。
 
-公开 APK 为 `OWOrnate-v1.0.1-rc23.apk`：341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`。它沿用原证书并保持非 debuggable；许可资产检查通过，14 个 APK assets 与 code31 相同。九附件线上大小、摘要和匿名公网下载校验通过。
+公开 APK 为 `OWOrnate-v1.0.1-rc27.apk`：341,073 bytes，SHA-256 `b54aa93e9b6aa337ff8121f171f04eb76dbd74a1bdeccb6da7ae083f925be317`。它沿用原证书并保持非 debuggable；许可资产检查通过，14 个 APK assets 与 code35 相同。发布校验以本版发布记录为准。
 
 ## 电脑首次设置
 
@@ -84,7 +84,7 @@ Setup 只准备管理器运行所需的基础环境，**不安装功能，也不
 
 ## 升级
 
-安装 code27 或更高版本后，可从“设置 → 管理器更新”检查 GitHub 并下载；插件从管理页“检查插件更新”检查。rc23 已于 2026-10-24 23:59（UTC+8）公开发布，更新清单在线。下载内容会先校验 ID、版本、大小和 SHA-256；APK 还要求原包名、严格更高 versionCode 与原签名，再交给系统安装器确认。
+安装 code27 或更高版本后，可从“设置 → 管理器更新”检查 GitHub 并下载；插件从管理页“检查插件更新”检查。本版清单与 APK 位于 rc27 发布页。下载内容会先校验 ID、版本、大小和 SHA-256；APK 还要求原包名、严格更高 versionCode 与原签名，再交给系统安装器确认。
 
 A.92 实测中，普通应用直接启动 `Settings$ManageAppExternalSourcesActivity` 会被系统拒绝，异常为 `not exported`。code32 仅在启动遇到 `ActivityNotFoundException` 或 `SecurityException` 时回退到标准 `ACTION_APPLICATION_DETAILS_SETTINGS` 应用信息页；实际可打开 `SingleAppManagerActivity`，其中显示“允许来自此来源的应用”开关。用户必须手动开启该开关，返回管理器后再次点击确认安装并通过系统安装器确认。管理器不会自动授予该权限，也不会自动确认安装。
 

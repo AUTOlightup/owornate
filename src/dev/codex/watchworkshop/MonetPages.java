@@ -150,9 +150,14 @@ final class MonetPages implements ModuleStatusView, ModuleManagement {
     }
 
     @Override public String discoverLine() {
-        if (installed()) return statusText();
-        if (available()) return "内置 · 可离线安装";
-        return statusText();
+        if (failed()) return "读取失败";
+        if (state == null || observation.confirmedAt == 0 || refreshing()) return "待确认";
+        if (needsSetup()) return "待设置";
+        if (incompatible()) return "不兼容";
+        if (available()) return "可安装";
+        if ("update".equals(state.kind)) return "可更新";
+        if (!state.activeKnown) return "待确认";
+        return state.active ? "已启用" : "已停用";
     }
 
     @Override public boolean showOnHome() {
@@ -604,7 +609,7 @@ final class MonetPages implements ModuleStatusView, ModuleManagement {
                 canRollback && connected && reachable() && !a.working(),
                 () -> a.go(PageIds.THEME_RESTORE));
         ui.value("当前版本", "莫奈组件 v6");
-        ui.row("模块管理", "启停、更新与卸载", "sliders", () -> a.go(PageIds.THEME));
+        ui.row("模块管理", "", "sliders", () -> a.go(PageIds.THEME));
     }
 
     private void themeRestore() {
@@ -706,17 +711,24 @@ final class MonetPages implements ModuleStatusView, ModuleManagement {
         cell.setGravity(Gravity.CENTER);
         cell.setMinimumHeight(a.dp(56));
         cell.setPadding(a.dp(4), a.dp(7), a.dp(4), a.dp(7));
-        GradientDrawable bg = a.shape(WorkshopUi.SURFACE, 12);
-        if (chosen) bg.setStroke(a.dp(1), WorkshopUi.ACCENT);
-        cell.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33ffffff), bg, null));
+        GradientDrawable bg = a.shape(chosen ? WorkshopUi.ACCENT_SURFACE : WorkshopUi.SURFACE, WorkshopUi.NOTE_RADIUS);
+        bg.setStroke(chosen ? a.dp(1) : Math.max(1, a.dp(0.5f)),
+                chosen ? WorkshopUi.SELECT_RING : WorkshopUi.OUTLINE);
+        cell.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff), bg,
+                a.shape(0xffffffff, WorkshopUi.NOTE_RADIUS)));
         cell.addView(new MonetViews.ColorDot(a, PRESETS[index], chosen),
                 new LinearLayout.LayoutParams(a.dp(20), a.dp(20)));
         TextView label = new TextView(a);
         label.setText(COLOR_NAMES[index]);
-        label.setTextColor(WorkshopUi.FG);
-        label.setTextSize(11);
+        label.setTextColor(chosen ? WorkshopUi.ACCENT : WorkshopUi.FG);
+        label.setTextSize(WorkshopUi.SECONDARY_SP);
+        label.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        label.setIncludeFontPadding(false);
         label.setGravity(Gravity.CENTER);
-        cell.addView(label);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-2, -2);
+        labelParams.topMargin = a.dp(4);
+        cell.addView(label, labelParams);
+        cell.setSelected(chosen);
         cell.setContentDescription(COLOR_NAMES[index] + (chosen ? "，已选择" : ""));
         dim(cell);
         cell.setOnClickListener(v -> save(new ThemeConfig(draft.mode, PRESETS[index], draft.corners), true));

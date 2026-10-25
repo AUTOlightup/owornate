@@ -50,10 +50,14 @@ final class CapturePages implements ModuleStatusView {
     }
 
     @Override public String discoverLine() {
-        if (failed()) return statusText();
-        if (installed()) return statusText();
-        if (available()) return "内置 · 可离线接入";
-        return statusText();
+        if (failed()) return "读取失败";
+        if (state == null || observation.confirmedAt == 0 || refreshing) return "待确认";
+        if (needsSetup()) return "待设置";
+        if (incompatible()) return "不兼容";
+        if (available()) return "可安装";
+        if ("update".equals(state.kind)) return "可更新";
+        if ("installed".equals(state.kind)) return "加载待确认";
+        return state.enabled() ? "已启用" : "已停用";
     }
 
     @Override public boolean showOnHome() {

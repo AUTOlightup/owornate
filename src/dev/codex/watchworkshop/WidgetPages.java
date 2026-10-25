@@ -92,10 +92,14 @@ final class WidgetPages implements ModuleStatusView, ModuleManagement {
     }
 
     @Override public String discoverLine() {
-        if (failed()) return statusText();
-        if (installed()) return statusText();
-        if (available()) return "可接入 · 信息、倒计时与课表";
-        return statusText();
+        if (failed()) return "读取失败";
+        if (!known() || !confirmed() || refreshing) return "待确认";
+        if (needsSetup()) return "待设置";
+        if (incompatible()) return "不兼容";
+        if (available()) return "可安装";
+        if (host.equals("update")) return "可更新";
+        if (host.equals("installed")) return "加载待确认";
+        return on() ? "已启用" : "已停用";
     }
 
     @Override public String homeLine() {
@@ -360,10 +364,10 @@ final class WidgetPages implements ModuleStatusView, ModuleManagement {
             ui.button("接入负一屏", true, managementState().can(Action.INSTALL), () -> request(Action.INSTALL));
         } else if (host.equals("setup")) {
             ui.note("完成一次首次部署后，可在这里接入小组件。", "warning");
-            ui.row("首次设置", "查看部署步骤", "book", () -> a.go(PageIds.GUIDE));
+            ui.row("首次设置", "", "book", () -> a.go(PageIds.GUIDE));
         } else if (host.equals("conflict")) {
             ui.note("现有运行组件不兼容，请先检查环境。", "warning");
-            ui.row("运行环境", "授权、版本与恢复", "shield", () -> a.go(PageIds.CHECK));
+            ui.row("运行环境", "", "shield", () -> a.go(PageIds.CHECK));
             ui.button("重新读取状态", false, !a.working(), () -> refresh(true));
         } else if (!failed() && operationError.isEmpty()) {
             ui.note("正在读取接入状态…");
@@ -425,9 +429,9 @@ final class WidgetPages implements ModuleStatusView, ModuleManagement {
         } else if (host.equals("update")) {
             ui.note("现有小组件运行文件需要更新。更新会保留功能启停状态。", "warning");
         } else if (host.equals("setup")) {
-            ui.row("首次设置", "查看部署步骤", "book", () -> a.go(PageIds.GUIDE));
+            ui.row("首次设置", "", "book", () -> a.go(PageIds.GUIDE));
         } else if (host.equals("conflict")) {
-            ui.row("运行环境", "授权、版本与恢复", "shield", () -> a.go(PageIds.CHECK));
+            ui.row("运行环境", "", "shield", () -> a.go(PageIds.CHECK));
         }
     }
 

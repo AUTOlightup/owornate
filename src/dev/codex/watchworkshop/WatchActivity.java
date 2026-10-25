@@ -76,6 +76,8 @@ abstract class WatchActivity extends Activity {
         getWindow().setNavigationBarColor(WorkshopUi.BG);
         scroll = new ScrollView(this);
         scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         scroll.setBackgroundColor(WorkshopUi.BG);
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
@@ -165,8 +167,10 @@ abstract class WatchActivity extends Activity {
         layout.setBackgroundColor(WorkshopUi.BG);
         layout.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        layout.addView(footer, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams footerParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        footerParams.setMargins(dp(WorkshopUi.PAGE_SIDE), dp(4), dp(WorkshopUi.PAGE_SIDE), dp(6));
+        layout.addView(footer, footerParams);
         setContentView(layout);
     }
 

@@ -28,15 +28,14 @@ public final class MainActivity extends WatchActivity {
 
     private static final class ModuleItem {
         final ModuleStatusView status;
-        final String title, icon, installedText, errorPrefix;
+        final String title, icon, errorPrefix;
         final Runnable openHome, openDiscover;
 
-        ModuleItem(ModuleStatusView status, String title, String icon, String installedText,
+        ModuleItem(ModuleStatusView status, String title, String icon,
                 String errorPrefix, Runnable openHome, Runnable openDiscover) {
             this.status = status;
             this.title = title;
             this.icon = icon;
-            this.installedText = installedText;
             this.errorPrefix = errorPrefix;
             this.openHome = openHome;
             this.openDiscover = openDiscover;
@@ -107,12 +106,12 @@ public final class MainActivity extends WatchActivity {
     }
 
     private void registerModules() {
-        ModuleItem monetItem = new ModuleItem(monet, "莫奈取色", "palette", "莫奈取色已安装", "",
+        ModuleItem monetItem = new ModuleItem(monet, "莫奈取色", "palette", "",
                 () -> go(monet.installed() ? PageIds.THEME : PageIds.DETAIL),
                 () -> go(PageIds.DETAIL));
-        ModuleItem widgetItem = new ModuleItem(widgets, "负一屏小组件", "layers", "小组件已接入", "小组件：",
+        ModuleItem widgetItem = new ModuleItem(widgets, "负一屏小组件", "layers", "小组件：",
                 () -> go(PageIds.WIDGETS), () -> go(PageIds.WIDGET_DETAIL));
-        ModuleItem captureItem = new ModuleItem(capture, "截屏与录屏", "scan", "截屏与录屏已安装", "截屏与录屏：",
+        ModuleItem captureItem = new ModuleItem(capture, "截屏与录屏", "scan", "截屏与录屏：",
                 capture::open, capture::open);
         modules.put("monet", monetItem);
         modules.put("widgets", widgetItem);
@@ -295,12 +294,15 @@ public final class MainActivity extends WatchActivity {
             if (item.status.installed()) installed++;
         }
         Integer count = allKnown ? Integer.valueOf(installed) : null;
-        ui.summary(count, "项功能，已纳入管理", homeStatus(count));
+        ui.summary(count, "项功能", "");
+        for (ModuleItem item : modules.values()) {
+            String warning = item.status.homeWarning();
+            if (!warning.isEmpty()) ui.note(warning, "warning");
+        }
         for (ModuleItem item : homeModules) {
             if (item.status.showOnHome()) {
                 PluginManifest imported = importedFeature(item);
-                ui.row(item.title, item.status.homeLine()
-                        + (imported == null ? "" : " · 本地包 " + imported.versionName),
+                ui.row(item.title, "",
                         item.icon, imported == null ? item.openHome : () -> openPlugin(imported.id));
             }
         }
@@ -308,52 +310,45 @@ public final class MainActivity extends WatchActivity {
         for (PluginManifest plugin : localPlugins) {
             ModuleItem nativeModule = modules.get(plugin.feature());
             if (nativeModule != null && nativeModule.status.showOnHome()) continue;
-            ui.row(plugin.name, "本地插件 · " + plugin.versionName, "layers", () -> openPlugin(plugin.id));
+            ui.row(plugin.name, "", "layers", () -> openPlugin(plugin.id));
         }
         if (!pluginsError.isEmpty()) {
             ui.note("本地插件列表读取失败：" + pluginsError, "warning");
             ui.button("重新读取插件列表", false, !pluginsLoading, this::loadPlugins);
         }
         if (anyReadFailed()) ui.button("重新读取状态", false, !working(), () -> refresh(true));
-        // 「发现优化」常驻：即使所有功能都已安装，仍保留入口以便查看接入状态或重新接入。
-        int available = 0;
-        for (ModuleItem item : modules.values()) {
-            if (item.status.available()) available++;
-        }
-        ui.row("发现优化",
-                available > 0 ? "还有 " + available + " 项可安装" : "查看功能与接入状态",
-                "compass", () -> go(PageIds.DISCOVER));
-    }
-
-    /** 概览卡的一行状态：读取问题优先，其次列出已装的功能。 */
-    private String homeStatus(Integer count) {
-        if (anyReadFailed() || !pluginsError.isEmpty()) return "部分状态读取失败";
-        for (ModuleItem item : modules.values()) {
-            String warning = item.status.homeWarning();
-            if (!warning.isEmpty()) return warning;
-        }
-        if (count == null) return anyRefreshing() ? "正在确认状态" : "状态待确认";
-        if (count == 0) return "尚未安装任何功能";
-        ArrayList<String> parts = new ArrayList<>();
-        for (ModuleItem item : homeModules) {
-            if (item.status.installed()) parts.add(item.installedText);
-        }
-        if (!localPlugins.isEmpty()) parts.add(localPlugins.size() + " 个本地插件");
-        return String.join(" · ", parts);
+        ui.row("发现优化", "", "compass", () -> go(PageIds.DISCOVER));
     }
 
     private void discover() {
-        ui.row("本地插件", "导入插件包与管理已导入插件", "layers", () -> openPlugin(""));
         List<ModuleCatalog.Entry> catalog = new ArrayList<>();
         for (Map.Entry<String, ModuleItem> entry : modules.entrySet()) {
             ModuleItem item = entry.getValue();
             catalog.add(new ModuleCatalog.Entry(entry.getKey(), item.title, item.status.installed()));
         }
-        for (ModuleCatalog.Entry entry : ModuleCatalog.sorted(catalog)) {
-            ModuleItem item = modules.get(entry.id);
-            PluginManifest imported = importedFeature(item);
-            ui.row(item.title, item.status.discoverLine(), item.icon,
-                    imported == null ? item.openDiscover : () -> openPlugin(imported.id));
+        List<ModuleCatalog.Entry> sorted = ModuleCatalog.sorted(catalog);
+        ui.title("未安装");
+        boolean hasUninstalled = false;
+        for (ModuleCatalog.Entry entry : sorted) {
+            if (!entry.installed) {
+                discoverRow(entry.id);
+                hasUninstalled = true;
+            }
         }
+        if (!hasUninstalled) ui.caption("暂无");
+
+        ui.title("已安装");
+        ui.highlightedRow("本地插件", "layers", () -> openPlugin(""));
+        for (ModuleCatalog.Entry entry : sorted) {
+            if (entry.installed) discoverRow(entry.id);
+        }
+    }
+
+    private void discoverRow(String id) {
+        ModuleItem item = modules.get(id);
+        PluginManifest imported = importedFeature(item);
+        String subtitle = item.status.installed() && imported != null ? imported.versionName : "";
+        ui.row(item.title, subtitle, item.icon,
+                imported == null ? item.openDiscover : () -> openPlugin(imported.id));
     }
 }

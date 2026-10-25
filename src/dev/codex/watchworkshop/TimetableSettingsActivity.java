@@ -13,7 +13,6 @@ import android.os.Bundle;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.text.InputType;
-import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -492,12 +491,14 @@ public final class TimetableSettingsActivity extends WatchActivity {
     private void dayTabs(LocalDate weekStart, LocalDate today, ZoneId zone) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setBackground(shape(WorkshopUi.SURFACE, WorkshopUi.ROW_RADIUS));
+        row.setPadding(dp(2), dp(2), dp(2), dp(2));
         for (int index = 0; index < 7; index++) {
             LocalDate date = weekStart.plusDays(index);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            params.leftMargin = dp(index == 0 ? 0 : 2);
-            params.rightMargin = dp(index == 6 ? 0 : 2);
+            params.leftMargin = dp(index == 0 ? 0 : 1);
+            params.rightMargin = dp(index == 6 ? 0 : 1);
             row.addView(dayCell(date, today, TimetableFocus.lessons(current, date, zone).size()), params);
         }
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
@@ -515,14 +516,16 @@ public final class TimetableSettingsActivity extends WatchActivity {
         cell.setGravity(Gravity.CENTER_HORIZONTAL);
         cell.setPadding(0, dp(6), 0, dp(6));
         cell.setMinimumHeight(dp(56));
-        GradientDrawable fill = shape(selected ? WorkshopUi.ACCENT_SURFACE : WorkshopUi.SURFACE, 12);
+        GradientDrawable fill = shape(selected ? WorkshopUi.ACCENT_SURFACE : 0x00000000, 12);
         if (selected) fill.setStroke(dp(1), WorkshopUi.SELECT_RING);
-        cell.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33ffffff), fill, shape(0xffffffff, 12)));
+        cell.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff), fill,
+                shape(0xffffffff, 12)));
+        cell.setSelected(selected);
         int ink = selected || isToday ? WorkshopUi.ACCENT : WorkshopUi.FG;
         String weekday = TimetableText.weekday(date.getDayOfWeek());
-        cell.addView(centered(text(weekday.substring(1), 11,
+        cell.addView(centered(text(weekday.substring(1), WorkshopUi.SECONDARY_SP,
                 selected ? WorkshopUi.ACCENT : WorkshopUi.MUTED, false)));
-        cell.addView(centered(text(String.valueOf(date.getDayOfMonth()), 15, ink, true)));
+        cell.addView(centered(text(String.valueOf(date.getDayOfMonth()), WorkshopUi.BODY_SP, ink, true)));
         View dot = new View(this);
         dot.setBackground(shape(count > 0 ? (selected ? WorkshopUi.ACCENT : WorkshopUi.WEAK) : 0x00000000, 3));
         LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(5), dp(5));
@@ -569,8 +572,10 @@ public final class TimetableSettingsActivity extends WatchActivity {
         boolean next = state.equals("下一节");
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.HORIZONTAL);
-        GradientDrawable fill = shape(ongoing ? WorkshopUi.ACCENT_SURFACE : WorkshopUi.SURFACE, 15);
-        if (ongoing) fill.setStroke(dp(1), WorkshopUi.SELECT_RING);
+        GradientDrawable fill = shape(ongoing ? WorkshopUi.ACCENT_SURFACE : WorkshopUi.SURFACE,
+                WorkshopUi.CARD_RADIUS);
+        fill.setStroke(ongoing ? dp(1) : Math.max(1, dp(0.5f)),
+                ongoing ? WorkshopUi.SELECT_RING : WorkshopUi.OUTLINE);
         tile.setBackground(fill);
         View bar = new View(this);
         bar.setBackground(shape(ongoing ? WorkshopUi.ACCENT : next ? WorkshopUi.MUTED : WorkshopUi.OUTLINE, 2));
@@ -598,24 +603,34 @@ public final class TimetableSettingsActivity extends WatchActivity {
         column.setPadding(dp(9), dp(8), dp(10), dp(9));
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
-        TextView time = text(lesson.start.format(TIME) + "–" + lesson.end.format(TIME), 13,
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        TextView time = text(lesson.start.format(TIME) + "–" + lesson.end.format(TIME),
+                WorkshopUi.BODY_SP,
                 ongoing ? WorkshopUi.ACCENT : WorkshopUi.FG, true);
-        head.addView(time, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout.LayoutParams timeParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        timeParams.rightMargin = dp(6);
+        head.addView(time, timeParams);
         if (!state.isEmpty()) {
             int stateColor = ongoing ? WorkshopUi.ACCENT : ended ? WorkshopUi.WEAK : WorkshopUi.MUTED;
-            head.addView(text(state, 11, stateColor, false));
+            TextView stateView = text(state, WorkshopUi.SECONDARY_SP, stateColor, false);
+            stateView.setSingleLine(true);
+            stateView.setGravity(Gravity.END);
+            head.addView(stateView);
         }
         column.addView(head);
-        TextView name = text(lesson.course.name.isEmpty() ? "未命名课程" : lesson.course.name, 15,
+        TextView name = text(lesson.course.name.isEmpty() ? "未命名课程" : lesson.course.name,
+                WorkshopUi.BODY_SP,
                 ended ? WorkshopUi.MUTED : WorkshopUi.FG, true);
-        name.setMaxLines(2);
-        name.setEllipsize(TextUtils.TruncateAt.END);
+        name.setLineSpacing(0f, 1.25f);
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         nameParams.topMargin = dp(3);
         column.addView(name, nameParams);
         if (!detail.isEmpty()) {
-            TextView line = text(detail, 11, ended ? WorkshopUi.WEAK : WorkshopUi.MUTED, false);
+            TextView line = text(detail, WorkshopUi.SECONDARY_SP,
+                    ended ? WorkshopUi.WEAK : WorkshopUi.MUTED, false);
+            line.setLineSpacing(0f, 1.3f);
             LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lineParams.topMargin = dp(2);
@@ -635,6 +650,8 @@ public final class TimetableSettingsActivity extends WatchActivity {
         view.setTextColor(color);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         view.setTypeface(medium ? Typeface.create("sans-serif-medium", Typeface.NORMAL) : Typeface.SANS_SERIF);
+        view.setIncludeFontPadding(false);
+        view.setFontFeatureSettings("tnum");
         view.setLineSpacing(0f, 1.2f);
         return view;
     }

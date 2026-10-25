@@ -83,16 +83,15 @@ final class SystemPages {
     /** 设置：运行环境和说明类入口在上，版本信息在下。 */
     private void settings() {
         WorkshopUi ui = a.ui;
-        ui.row("运行环境", "授权、组件和模块接入状态", "shield", () -> a.go(PageIds.CHECK));
-        ui.row("首次设置", "安装与恢复说明", "book", () -> a.go(PageIds.GUIDE));
-        ui.row("技术详情", "授权与组件信息", "info", () -> a.go(PageIds.TECHNICAL));
-        ui.row("开源许可", "Material Color Utilities 与 Frida", "file", () -> a.go(PageIds.LICENSES));
-        ui.row("管理器更新", "检查 GitHub 发布版本", "info", () ->
+        ui.row("运行环境", "", "shield", () -> a.go(PageIds.CHECK));
+        ui.row("首次设置", "", "book", () -> a.go(PageIds.GUIDE));
+        ui.row("技术详情", "", "info", () -> a.go(PageIds.TECHNICAL));
+        ui.row("开源许可", "", "file", () -> a.go(PageIds.LICENSES));
+        ui.row("管理器更新", "", "info", () ->
                 a.startActivity(new android.content.Intent(a, UpdateActivity.class)));
         ui.title("关于 OWOrnate");
         ui.value("版本", appVersion(a));
-        ui.value("包名", a.getPackageName());
-        ui.note("管理控制中心配色、连续圆角、截屏与录屏，以及负一屏信息、倒计时和课表小组件。内置功能可离线配置；首次部署需电脑和现有 root adbd。");
+        ui.note("手表插件管理器");
     }
 
     private void probe() {
@@ -231,7 +230,8 @@ final class SystemPages {
 
     private void technical() {
         WorkshopUi ui = a.ui;
-        ui.value("App", a.getPackageName() + " / " + appVersion(a));
+        ui.value("App", "OWOrnate / " + appVersion(a));
+        ui.value("包名", a.getPackageName());
         ui.value("本机通道", AdbClient.HOST + ":" + AdbClient.PORT + " · root adbd");
         ui.value("截屏与录屏", a.capture.statusText());
         if (a.capture.failed()) ui.note("截屏与录屏：" + a.capture.error(), "warning");

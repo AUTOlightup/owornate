@@ -71,8 +71,15 @@ final class MonetViews {
 
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
+            paint.setStyle(Paint.Style.FILL);
             paint.setColor(WorkshopUi.SURFACE);
-            canvas.drawRoundRect(0, 0, getWidth(), dp(HEIGHT_DP), dp(15), dp(15), paint);
+            float radius = dp(WorkshopUi.ROW_RADIUS);
+            canvas.drawRoundRect(0, 0, getWidth(), dp(HEIGHT_DP), radius, radius, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1, dp(0.5f)));
+            paint.setColor(WorkshopUi.OUTLINE);
+            canvas.drawRoundRect(1, 1, getWidth() - 1, dp(HEIGHT_DP) - 1, radius, radius, paint);
+            paint.setStyle(Paint.Style.FILL);
             boolean original = draft.mode.equals("original");
             boolean waiting = draft.mode.equals("auto") && autoSeed == null;
             if (original || waiting) {

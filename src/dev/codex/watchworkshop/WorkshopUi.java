@@ -9,6 +9,8 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -22,77 +24,68 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * 腕上工坊通用原生组件（首发 UI 对照实现）。
- *
- * <p>取值来源：outputs/腕上工坊-界面设计/设计变量.json 与 work/watch-ui/app.css。
- * 原型画布 402x476px / density 2，因此原型 px 除以 2 即本类的 dp：
- * 行 96px→48dp、按钮 88px→44dp、行图标 44px→22dp、页头命中区 88px→44dp、
- * 行圆角 30px→15dp、按钮圆角 28px→14dp、块间距 12px→6dp。
- *
- * <p>职责边界：页面左右 8dp、顶部 10dp、尾部 32dp 的内边距与 ScrollView 由
- * WatchActivity 负责；本类只把内容块追加进构造函数传入的 body，
- * 每个块自带 6dp 下间距，不修改 body 的 padding。
- *
- * <p>所有文字使用 sp，跟随系统 fontScale；图标是 res/drawable/icon_*.xml 里的矢量描边图，
- * 不使用 unicode 字形。
+ * OWOrnate 管理器原生视觉组件：黑底、暖金强调、中性卡面与一致的触控反馈。
+ * 页面与编辑器共享此样式；小组件 RemoteViews 及其原样预览独立渲染。
+ * 所有正文使用 sp，交互命中区至少 44dp；本类只管理内容块与块间距。
  */
 public final class WorkshopUi {
 
     // ------------------------------------------------------------------
-    // 语义色（设计变量.json）
+    // 管理器语义色（不用于小组件 RemoteViews）
     // ------------------------------------------------------------------
     public static final int BG = 0xff000000;
-    public static final int SURFACE = 0xff12161e;
-    public static final int SOFT = 0xff191f29;
-    public static final int OUTLINE = 0xff273141;
-    public static final int FG = 0xfff0f3fa;
-    public static final int MUTED = 0xffa4aec0;
-    public static final int WEAK = 0xff748095;
-    public static final int ACCENT = 0xffebc16c;
-    public static final int ACCENT_SURFACE = 0xff282216;
-    public static final int ON_ACCENT = 0xff1e1a11;
-    public static final int SUCCESS = 0xff99d5b4;
-    public static final int WARNING = 0xffffc857;
-    public static final int DANGER = 0xffff6b6b;
+    public static final int SURFACE = 0xff15181c;
+    public static final int SOFT = 0xff20252b;
+    public static final int OUTLINE = 0xff2b3037;
+    public static final int FG = 0xfff4f1eb;
+    public static final int MUTED = 0xffadb2ba;
+    public static final int WEAK = 0xff838a95;
+    public static final int ACCENT = 0xfff1c779;
+    public static final int ACCENT_SURFACE = 0xff2b251a;
+    public static final int ON_ACCENT = 0xff241c0e;
+    public static final int SUCCESS = 0xff9bd9bb;
+    public static final int WARNING = 0xffedc77f;
+    public static final int DANGER = 0xffff9991;
     /** note 语义底色。 */
-    public static final int WARNING_BG = 0xff282315;
-    public static final int SUCCESS_BG = 0xff16251d;
-    public static final int DANGER_BG = 0xff291719;
+    public static final int WARNING_BG = 0xff282218;
+    public static final int SUCCESS_BG = 0xff17251e;
+    public static final int DANGER_BG = 0xff2c1b1d;
     /** danger 按钮文字色。 */
-    public static final int DANGER_INK = 0xff240b0b;
+    public static final int DANGER_INK = 0xff32120f;
     /** 概览卡片副文本色。 */
-    public static final int SUMMARY_LABEL = 0xffe1d8c0;
-    public static final int SUMMARY_STATUS = 0xffc6b996;
+    public static final int SUMMARY_LABEL = 0xffede0c5;
+    public static final int SUMMARY_STATUS = 0xffc7b998;
     /** 控件内部件。 */
-    public static final int TRACK_OFF = 0xff39424f;
-    public static final int KNOB_OFF = 0xffb2bdcb;
-    public static final int KNOB_ON = 0xff362e1c;
-    public static final int SELECT_RING = 0xff6f6040;
+    public static final int TRACK_OFF = 0xff383f49;
+    public static final int KNOB_OFF = 0xffc2c8d0;
+    public static final int KNOB_ON = 0xff392b16;
+    public static final int SELECT_RING = 0xff75603b;
 
     // ------------------------------------------------------------------
-    // 尺寸常量（dp），与 设计变量.json / app.css 一一对应
+    // 管理器尺寸（dp）；维持原有 44dp 最小触控范围
     // ------------------------------------------------------------------
     public static final int GAP = 6;           // .watch-content gap 12px
     public static final int PAGE_SIDE = 8;     // .scroll 16px（由 MainActivity 应用）
-    public static final int PAGE_TOP = 10;     // .scroll 20px（由 MainActivity 应用）
-    public static final int PAGE_BOTTOM = 32;  // .scroll 64px（由 MainActivity 应用）
+    public static final int PAGE_TOP = 8; // 页面上边距
+    public static final int PAGE_BOTTOM = 24; // 滚动尾部留白
     public static final int HIT = 44;          // 44x44dp 命中区 / 主按钮 88px
     public static final int ROW_MIN = 48;      // .w-row 96px
-    public static final int ROW_RADIUS = 15;   // .w-row 30px
-    public static final int BTN_RADIUS = 14;   // .w-btn 28px
-    public static final int NOTE_RADIUS = 12;  // .w-note 24px
-    public static final int CARD_RADIUS = 16;  // .summary-card 32px
-    public static final int HEAD_ICON = 20;    // .watch-head svg 40px
-    public static final int ROW_ICON = 22;     // .row-icon 44px
+    public static final int ROW_RADIUS = 17; // 导航与选择行
+    public static final int BTN_RADIUS = 16; // 操作按钮
+    public static final int NOTE_RADIUS = 14; // 状态与输入框
+    public static final int CARD_RADIUS = 20; // 概览与说明卡
+    public static final int HEAD_ICON = 18; // 页头图标
+    public static final int ROW_ICON = 18; // 图标底座内的图形
     public static final int CHEVRON = 12;      // .row-chevron 24px
     public static final int TITLE_SP = 20;     // .watch-head.root h2 40px
-    public static final int HEAD_SP = 17;      // .watch-head h2 34px
+    public static final int HEAD_SP = 16; // 详情标题
     public static final int BODY_SP = 13;      // 26px
     public static final int SECONDARY_SP = 11; // 22px
-    public static final int SECTION_SP = 12;   // .w-section 24px
+    public static final int SECTION_SP = 11; // 分组与辅助标题
     public static final int HERO_TITLE_SP = 18;
 
-    private static final int RIPPLE = 0x33ffffff;
+    private static final int RIPPLE = 0x22ffffff;
+    private static final int ICON_SURFACE = 0xff24292f;
 
     private final Activity activity;
     private final LinearLayout body;
@@ -113,13 +106,13 @@ public final class WorkshopUi {
 
     /**
      * 页头：左侧 44x44dp 返回命中区、可换行短标题、首页右侧 44x44dp 设置入口。
-     * 与内容一起滚动，无吸顶；root=true 时标题 20sp，否则 17sp。
+     * 与内容一起滚动，无吸顶；root=true 时标题 20sp，否则 16sp。
      * back/settings 传 null 表示不显示对应按钮。
      */
     public void header(String title, boolean root, Runnable back, Runnable settings) {
         LinearLayout head = headBase(title, root, false, back);
         if (settings != null) {
-            ImageView hit = hitIcon("sliders", HEAD_ICON, FG, "设备与设置");
+            ImageView hit = hitIcon("sliders", HEAD_ICON, ACCENT, "设备与设置");
             final Runnable tap = settings;
             hit.setOnClickListener(v -> tap.run());
             head.addView(hit, new LinearLayout.LayoutParams(dp(HIT), dp(HIT)));
@@ -132,7 +125,7 @@ public final class WorkshopUi {
      *
      * <p>checked=null 表示状态未知/读取中，绘制加载符号而不是确定的关闭；非 null 时
      * 使用与 {@link #toggle} 相同的 SwitchMark 开关外观。开关命中区 44dp，
-     * 标题占满剩余宽度并在必要时单行省略，确保返回、标题、开关在画布上不重叠。
+     * 标题占满剩余宽度，最多两行，确保大字体下返回、标题、开关互不重叠。
      *
      * <p>内容描述随模块标题和启停状态变化。
      * enabled=false 时关闭点击并把开关压暗以给出明确反馈。
@@ -160,9 +153,9 @@ public final class WorkshopUi {
 
     /**
      * 页头基座：可选的 44x44dp 返回命中区 + 占满剩余宽度的标题。
-     * root 决定标题 20sp/17sp 与左侧 6dp 间距；singleLine 时单行省略。
+     * root 决定标题 20sp/16sp 与左侧 6dp 间距；compact 时最多两行。
      */
-    private LinearLayout headBase(String title, boolean root, boolean singleLine, Runnable back) {
+    private LinearLayout headBase(String title, boolean root, boolean compact, Runnable back) {
         LinearLayout head = new LinearLayout(activity);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
@@ -175,8 +168,8 @@ public final class WorkshopUi {
         }
         TextView label = text(title, root ? TITLE_SP : HEAD_SP, FG, medium);
         label.setLineSpacing(0f, 1.25f);
-        if (singleLine) {
-            label.setMaxLines(1);
+        if (compact) {
+            label.setMaxLines(2);
             label.setEllipsize(TextUtils.TruncateAt.END);
         }
         LinearLayout.LayoutParams titleParams =
@@ -199,11 +192,19 @@ public final class WorkshopUi {
     // 内容块
     // ------------------------------------------------------------------
 
-    /** 正文 13sp / 行高 1.55。 */
+    /** 正文 13sp / 行高 1.4。 */
     public TextView text(String value) {
         TextView v = text(value, BODY_SP, FG, regular);
-        v.setLineSpacing(0f, 1.55f);
-        v.setPadding(dp(3), dp(2), dp(3), dp(4));
+        v.setLineSpacing(0f, 1.4f);
+        v.setPadding(dp(4), dp(3), dp(4), dp(5));
+        return (TextView) add(v);
+    }
+
+    /** 轻量辅助说明，不使用卡片底；错误与重要状态仍用 note。 */
+    public TextView caption(String value) {
+        TextView v = text(value, SECONDARY_SP, MUTED, regular);
+        v.setLineSpacing(0f, 1.35f);
+        v.setPadding(dp(5), dp(2), dp(5), dp(4));
         return (TextView) add(v);
     }
 
@@ -215,17 +216,17 @@ public final class WorkshopUi {
     /** 说明卡。tone: "" 中性 / warning / success / danger。 */
     public TextView note(String value, String tone) {
         TextView v = text(value, SECONDARY_SP, toneInk(tone, MUTED), regular);
-        v.setLineSpacing(0f, 1.55f);
-        v.setPadding(dp(10), dp(8), dp(10), dp(8));
-        v.setBackground(shape(toneBackground(tone), NOTE_RADIUS));
+        v.setLineSpacing(0f, 1.4f);
+        v.setPadding(dp(11), dp(9), dp(11), dp(9));
+        v.setBackground(panel(toneBackground(tone), NOTE_RADIUS));
         return (TextView) add(v);
     }
 
-    /** 小节标题 12sp。 */
+    /** 小节标题 11sp，与下一组内容保持紧凑间距。 */
     public TextView title(String value) {
-        TextView v = text(value, SECTION_SP, MUTED, regular);
-        v.setLineSpacing(0f, 1.4f);
-        v.setPadding(dp(4), dp(8), dp(4), 0);
+        TextView v = text(value, SECTION_SP, MUTED, medium);
+        v.setLineSpacing(0f, 1.25f);
+        v.setPadding(dp(5), dp(7), dp(5), dp(2));
         return (TextView) add(v);
     }
 
@@ -233,10 +234,11 @@ public final class WorkshopUi {
     public View value(String label, String content) {
         LinearLayout block = new LinearLayout(activity);
         block.setOrientation(LinearLayout.VERTICAL);
-        block.setPadding(dp(4), dp(6), dp(4), dp(6));
+        block.setPadding(dp(11), dp(9), dp(11), dp(10));
+        block.setBackground(panel(SURFACE, NOTE_RADIUS));
         block.addView(text(label, SECONDARY_SP, MUTED, regular));
         TextView val = text(content, BODY_SP, FG, regular);
-        val.setLineSpacing(0f, 1.4f);
+        val.setLineSpacing(0f, 1.25f);
         LinearLayout.LayoutParams valueParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         valueParams.topMargin = dp(2);
@@ -256,7 +258,7 @@ public final class WorkshopUi {
     public TextView button(String label, boolean primary, boolean enabled, Runnable action) {
         int background = primary ? ACCENT : SOFT;
         int ink = primary ? ON_ACCENT : FG;
-        TextView v = text(label, BODY_SP, ink, primary ? medium : regular);
+        TextView v = text(label, BODY_SP, ink, medium);
         v.setGravity(Gravity.CENTER);
         v.setMinHeight(dp(HIT));
         v.setPadding(dp(10), dp(8), dp(10), dp(8));
@@ -268,25 +270,37 @@ public final class WorkshopUi {
             v.setOnClickListener(x -> tap.run());
         } else {
             v.setEnabled(false);
-            v.setAlpha(0.45f);
+            v.setAlpha(0.5f);
             v.setContentDescription(label + "，暂不可执行");
         }
         return (TextView) add(v);
     }
 
-    /** 导航行：22dp 功能图标 + 名称 + 一条说明 + 箭头，整行打开同一目标。 */
+    /** 导航行：28dp 图标底座 + 名称 + 可选说明 + 箭头，整行打开同一目标。 */
     public View row(String label, String sub, String icon, Runnable action) {
+        return navigationRow(label, sub, icon, false, action);
+    }
+
+    /** 插件库入口：与普通功能共享布局，以暖金底色突出。 */
+    public View highlightedRow(String label, String icon, Runnable action) {
+        return navigationRow(label, "", icon, true, action);
+    }
+
+    private View navigationRow(String label, String sub, String icon, boolean highlighted, Runnable action) {
         LinearLayout r = new LinearLayout(activity);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
         r.setMinimumHeight(dp(ROW_MIN));
-        r.setPadding(dp(9), dp(8), dp(9), dp(8));
-        r.setBackground(press(SURFACE, ROW_RADIUS));
+        r.setPadding(dp(10), dp(10), dp(10), dp(10));
+        r.setBackground(highlighted ? pressDrawable(accentPanel(ROW_RADIUS), ROW_RADIUS)
+                : press(SURFACE, ROW_RADIUS));
         if (icon != null && !icon.isEmpty()) {
             ImageView glyph = iconView(icon, ROW_ICON, ACCENT);
+            glyph.setBackground(shape(highlighted ? 0xff453620 : ICON_SURFACE, 10));
+            glyph.setPadding(dp(5), dp(5), dp(5), dp(5));
             LinearLayout.LayoutParams iconParams =
-                    new LinearLayout.LayoutParams(dp(ROW_ICON), dp(ROW_ICON));
-            iconParams.rightMargin = dp(7);
+                    new LinearLayout.LayoutParams(dp(28), dp(28));
+            iconParams.rightMargin = dp(8);
             r.addView(glyph, iconParams);
         }
         r.addView(copy(label, sub),
@@ -321,7 +335,7 @@ public final class WorkshopUi {
             String sub, M mark, int markWidth, int markHeight, boolean checked, Runnable action) {
         r.setGravity(Gravity.CENTER_VERTICAL);
         r.setMinimumHeight(dp(ROW_MIN));
-        r.setPadding(dp(9), dp(8), dp(9), dp(8));
+        r.setPadding(dp(11), dp(9), dp(11), dp(9));
         r.setBackground(background);
         r.addView(copy(label, sub),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -347,8 +361,16 @@ public final class WorkshopUi {
         input.setHintTextColor(WEAK);
         input.setTextColor(FG);
         input.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
-        input.setPadding(dp(10), dp(8), dp(10), dp(8));
-        input.setBackground(shape(SURFACE, NOTE_RADIUS));
+        input.setTypeface(regular);
+        input.setMinHeight(dp(HIT));
+        GradientDrawable focused = panel(SURFACE, NOTE_RADIUS);
+        focused.setStroke(dp(1), ACCENT);
+        StateListDrawable field = new StateListDrawable();
+        field.addState(new int[] { android.R.attr.state_focused }, focused);
+        field.addState(new int[0], panel(SURFACE, NOTE_RADIUS));
+        input.setBackground(field);
+        input.setBackgroundTintList(null);
+        input.setPadding(dp(11), dp(10), dp(11), dp(10));
         return (EditText) add(input);
     }
 
@@ -360,7 +382,7 @@ public final class WorkshopUi {
         LinearLayout r = new LinearLayout(activity);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setPadding(dp(4), dp(2), dp(4), dp(2));
-        r.setBackground(shape(SURFACE, ROW_RADIUS));
+        r.setBackground(panel(SURFACE, ROW_RADIUS));
         for (WheelPicker picker : pickers) {
             r.addView(picker, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         }
@@ -375,19 +397,23 @@ public final class WorkshopUi {
         LinearLayout r = new LinearLayout(activity);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setBackground(shape(SURFACE, ROW_RADIUS));
+        r.setBackground(panel(SURFACE, ROW_RADIUS));
         ImageView left = hitIcon("back", 16, prev == null ? WEAK : FG, "上一页");
         if (prev != null) left.setOnClickListener(v -> prev.run());
         r.addView(left, new LinearLayout.LayoutParams(dp(HIT), dp(HIT)));
         LinearLayout middle = new LinearLayout(activity);
         middle.setOrientation(LinearLayout.VERTICAL);
-        middle.setGravity(Gravity.CENTER_HORIZONTAL);
-        TextView head = text(title, BODY_SP + 1, FG, medium);
+        middle.setGravity(Gravity.CENTER);
+        middle.setMinimumHeight(dp(HIT));
+        middle.setPadding(dp(2), dp(6), dp(2), dp(6));
+        TextView head = text(title, BODY_SP, FG, medium);
         head.setGravity(Gravity.CENTER);
+        head.setLineSpacing(0f, 1.2f);
         middle.addView(head);
         if (sub != null && !sub.isEmpty()) {
             TextView line = text(sub, SECONDARY_SP, MUTED, regular);
             line.setGravity(Gravity.CENTER);
+            line.setFontFeatureSettings("tnum");
             middle.addView(line);
         }
         if (center != null) {
@@ -395,7 +421,7 @@ public final class WorkshopUi {
             middle.setOnClickListener(v -> center.run());
         }
         middle.setContentDescription(describe(title, sub));
-        r.addView(middle, new LinearLayout.LayoutParams(0, dp(HIT), 1f));
+        r.addView(middle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         ImageView right = hitIcon("chevron", 16, next == null ? WEAK : FG, "下一页");
         if (next != null) right.setOnClickListener(v -> next.run());
         r.addView(right, new LinearLayout.LayoutParams(dp(HIT), dp(HIT)));
@@ -405,13 +431,13 @@ public final class WorkshopUi {
     public View summary(Integer count, String label, String status) {
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(12), dp(7), dp(12), dp(7));
-        card.setBackground(shape(ACCENT_SURFACE, CARD_RADIUS));
+        card.setPadding(dp(13), dp(9), dp(13), dp(9));
+        card.setBackground(accentPanel(CARD_RADIUS));
 
         LinearLayout line = new LinearLayout(activity);
         line.setOrientation(LinearLayout.HORIZONTAL);
-        line.setGravity(Gravity.BOTTOM);
-        TextView number = text(count==null?"—":String.valueOf(count), 24, ACCENT, medium);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+        TextView number = text(count==null?"—":String.valueOf(count), 28, ACCENT, medium);
         number.setFontFeatureSettings("tnum");
         number.setLineSpacing(0f, 1.1f);
         line.addView(number);
@@ -424,24 +450,26 @@ public final class WorkshopUi {
         line.addView(caption, captionParams);
         card.addView(line);
 
-        LinearLayout statusLine = new LinearLayout(activity);
-        statusLine.setOrientation(LinearLayout.HORIZONTAL);
-        statusLine.setGravity(Gravity.CENTER_VERTICAL);
-        View dot = new View(activity);
-        dot.setBackground(oval(count==null?SUMMARY_STATUS:count>0?SUCCESS:WARNING, 0, 0));
-        dot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        statusLine.addView(dot, new LinearLayout.LayoutParams(dp(5), dp(5)));
-        TextView statusText = text(status, SECONDARY_SP, SUMMARY_STATUS, regular);
-        statusText.setLineSpacing(0f, 1.4f);
-        LinearLayout.LayoutParams statusParams =
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        statusParams.leftMargin = dp(4);
-        statusLine.addView(statusText, statusParams);
-        LinearLayout.LayoutParams statusLineParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        statusLineParams.topMargin = dp(1);
-        card.addView(statusLine, statusLineParams);
-        card.setContentDescription((count==null?"优化数量待确认":count + " " + label) + "，" + status);
+        if (status != null && !status.isEmpty()) {
+            LinearLayout statusLine = new LinearLayout(activity);
+            statusLine.setOrientation(LinearLayout.HORIZONTAL);
+            statusLine.setGravity(Gravity.CENTER_VERTICAL);
+            View dot = new View(activity);
+            dot.setBackground(oval(count==null?SUMMARY_STATUS:count>0?SUCCESS:WARNING, 0, 0));
+            dot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            statusLine.addView(dot, new LinearLayout.LayoutParams(dp(5), dp(5)));
+            TextView statusText = text(status, SECONDARY_SP, SUMMARY_STATUS, regular);
+            statusText.setLineSpacing(0f, 1.4f);
+            LinearLayout.LayoutParams statusParams =
+                    new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            statusParams.leftMargin = dp(4);
+            statusLine.addView(statusText, statusParams);
+            LinearLayout.LayoutParams statusLineParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            statusLineParams.topMargin = dp(1);
+            card.addView(statusLine, statusLineParams);
+        }
+        card.setContentDescription(describe(count == null ? "功能数量待确认" : count + " " + label, status));
         return add(card);
     }
 
@@ -450,10 +478,13 @@ public final class WorkshopUi {
         int ink = toneInk(tone, ACCENT);
         LinearLayout block = new LinearLayout(activity);
         block.setOrientation(LinearLayout.VERTICAL);
-        block.setPadding(dp(4), dp(4), dp(4), dp(8));
-        ImageView glyph = iconView(icon, 33, ink);
-        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(33), dp(33));
-        iconParams.bottomMargin = dp(9);
+        block.setPadding(dp(12), dp(12), dp(12), dp(13));
+        block.setBackground(panel(SURFACE, CARD_RADIUS));
+        ImageView glyph = iconView(icon, 22, ink);
+        glyph.setPadding(dp(7), dp(7), dp(7), dp(7));
+        glyph.setBackground(shape(tone.isEmpty() ? ICON_SURFACE : toneBackground(tone), 12));
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(36), dp(36));
+        iconParams.bottomMargin = dp(8);
         block.addView(glyph, iconParams);
         TextView headline = text(title, HERO_TITLE_SP, FG, medium);
         headline.setLineSpacing(0f, 1.35f);
@@ -461,9 +492,11 @@ public final class WorkshopUi {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         titleParams.bottomMargin = dp(5);
         block.addView(headline, titleParams);
-        TextView detail = text(sub, SECTION_SP, MUTED, regular);
-        detail.setLineSpacing(0f, 1.5f);
-        block.addView(detail);
+        if (sub != null && !sub.isEmpty()) {
+            TextView detail = text(sub, SECONDARY_SP, MUTED, regular);
+            detail.setLineSpacing(0f, 1.4f);
+            block.addView(detail);
+        }
         return add(block);
     }
 
@@ -517,14 +550,15 @@ public final class WorkshopUi {
         LinearLayout block = new LinearLayout(activity);
         block.setOrientation(LinearLayout.VERTICAL);
         TextView name = text(label, BODY_SP, FG, regular);
-        name.setLineSpacing(0f, 1.4f);
+        name.setLineSpacing(0f, 1.25f);
         block.addView(name);
         if (sub != null && !sub.isEmpty()) {
             TextView detail = text(sub, SECONDARY_SP, MUTED, regular);
-            detail.setLineSpacing(0f, 1.4f);
+            detail.setLineSpacing(0f, 1.25f);
+            detail.setFontFeatureSettings("tnum");
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.topMargin = dp(1);
+            lp.topMargin = dp(3);
             block.addView(detail, lp);
         }
         return block;
@@ -536,6 +570,7 @@ public final class WorkshopUi {
         v.setTextColor(color);
         v.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
         v.setTypeface(face);
+        v.setIncludeFontPadding(false);
         v.setFontFeatureSettings("kern");
         return v;
     }
@@ -558,8 +593,24 @@ public final class WorkshopUi {
         return d;
     }
 
+    private GradientDrawable panel(int color, int radiusDp) {
+        GradientDrawable drawable = shape(color, radiusDp);
+        drawable.setStroke(Math.max(1, dp(0.5f)), color == ACCENT_SURFACE ? SELECT_RING : OUTLINE);
+        return drawable;
+    }
+
+    private GradientDrawable accentPanel(int radiusDp) {
+        GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] { 0xff352c1d, 0xff211e17 });
+        drawable.setCornerRadius(dp(radiusDp));
+        drawable.setStroke(Math.max(1, dp(0.5f)), SELECT_RING);
+        return drawable;
+    }
+
     private Drawable press(int color, int radiusDp) {
-        return pressDrawable(shape(color, radiusDp), radiusDp);
+        GradientDrawable content = color == SURFACE || color == SOFT || color == ACCENT_SURFACE
+                ? panel(color, radiusDp) : shape(color, radiusDp);
+        return pressDrawable(content, radiusDp);
     }
 
     private Drawable pressDrawable(GradientDrawable content, int radiusDp) {
@@ -568,7 +619,7 @@ public final class WorkshopUi {
     }
 
     private Drawable choiceBackground(boolean checked) {
-        GradientDrawable content = shape(checked ? ACCENT_SURFACE : SURFACE, ROW_RADIUS);
+        GradientDrawable content = panel(checked ? ACCENT_SURFACE : SURFACE, ROW_RADIUS);
         if (checked) {
             content.setStroke(dp(1), SELECT_RING);
         }
@@ -794,9 +845,10 @@ public final class WorkshopUi {
     private ImageView hitIcon(String name, int sizeDp, int color, String description) {
         ImageView view = iconView(name, sizeDp, color);
         int inset = dp((HIT - sizeDp) / 2f);
-        view.setPadding(inset, inset, inset, inset);
         view.setContentDescription(description);
-        view.setBackground(press(0x00000000, 12));
+        view.setBackground(new InsetDrawable(press(SURFACE, 12), dp(6)));
+        // InsetDrawable 会提供自己的 padding，图形留白必须最后设置。
+        view.setPadding(inset, inset, inset, inset);
         view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         view.setFocusable(true);
         return view;
