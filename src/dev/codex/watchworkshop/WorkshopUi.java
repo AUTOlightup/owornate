@@ -12,7 +12,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.graphics.drawable.RippleDrawable;
-import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -79,6 +78,7 @@ public final class WorkshopUi {
     public static final int CHEVRON = 12;      // .row-chevron 24px
     public static final int TITLE_SP = 20;     // .watch-head.root h2 40px
     public static final int HEAD_SP = 16; // 详情标题
+    public static final int MODULE_TITLE_SP = 17; // 全宽插件标题，兼顾大字体下一行显示
     public static final int BODY_SP = 13;      // 26px
     public static final int SECONDARY_SP = 11; // 22px
     public static final int SECTION_SP = 11; // 分组与辅助标题
@@ -110,7 +110,7 @@ public final class WorkshopUi {
      * back/settings 传 null 表示不显示对应按钮。
      */
     public void header(String title, boolean root, Runnable back, Runnable settings) {
-        LinearLayout head = headBase(title, root, false, back);
+        LinearLayout head = headBase(title, root, back);
         if (settings != null) {
             ImageView hit = hitIcon("sliders", HEAD_ICON, ACCENT, "设备与设置");
             final Runnable tap = settings;
@@ -121,18 +121,27 @@ public final class WorkshopUi {
     }
 
     /**
-     * 详情页页头：左侧返回 + 标题 + 右上三态启停开关（首页设置入口不在此）。
+     * 详情页页头：首行返回与总开关，下方全宽标题。
      *
      * <p>checked=null 表示状态未知/读取中，绘制加载符号而不是确定的关闭；非 null 时
      * 使用与 {@link #toggle} 相同的 SwitchMark 开关外观。开关命中区 44dp，
-     * 标题占满剩余宽度，最多两行，确保大字体下返回、标题、开关互不重叠。
+     * 标题不与按钮争抢宽度，可按系统字号自然换行，不截断插件名称。
      *
      * <p>内容描述随模块标题和启停状态变化。
      * enabled=false 时关闭点击并把开关压暗以给出明确反馈。
      */
     public void headerToggle(String title, Runnable back, Boolean checked, boolean enabled,
                              Runnable action) {
-        LinearLayout head = headBase(title, false, true, back);
+        LinearLayout block = new LinearLayout(activity);
+        block.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout head = new LinearLayout(activity);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        if (back != null) {
+            ImageView hit = hitIcon("back", HEAD_ICON, FG, "返回");
+            hit.setOnClickListener(v -> back.run());
+            head.addView(hit, new LinearLayout.LayoutParams(dp(HIT), dp(HIT)));
+        }
+        head.addView(new View(activity), new LinearLayout.LayoutParams(0, 1, 1f));
         TriSwitchMark mark = new TriSwitchMark(activity);
         mark.setState(checked);
         mark.setBackground(press(0x00000000, 12));
@@ -148,14 +157,20 @@ public final class WorkshopUi {
             mark.setAlpha(0.4f);
         }
         head.addView(mark, new LinearLayout.LayoutParams(dp(HIT), dp(HIT)));
-        add(head);
+        block.addView(head);
+        TextView label = text(title, MODULE_TITLE_SP, FG, medium);
+        label.setLineSpacing(0f, 1.15f);
+        label.setPadding(dp(5), dp(2), dp(5), 0);
+        block.addView(label, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        add(block);
     }
 
     /**
      * 页头基座：可选的 44x44dp 返回命中区 + 占满剩余宽度的标题。
-     * root 决定标题 20sp/16sp 与左侧 6dp 间距；compact 时最多两行。
+     * root 决定标题 20sp/16sp 与左侧 6dp 间距。
      */
-    private LinearLayout headBase(String title, boolean root, boolean compact, Runnable back) {
+    private LinearLayout headBase(String title, boolean root, Runnable back) {
         LinearLayout head = new LinearLayout(activity);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
@@ -168,10 +183,6 @@ public final class WorkshopUi {
         }
         TextView label = text(title, root ? TITLE_SP : HEAD_SP, FG, medium);
         label.setLineSpacing(0f, 1.25f);
-        if (compact) {
-            label.setMaxLines(2);
-            label.setEllipsize(TextUtils.TruncateAt.END);
-        }
         LinearLayout.LayoutParams titleParams =
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         if (root) {
@@ -278,15 +289,21 @@ public final class WorkshopUi {
 
     /** 导航行：28dp 图标底座 + 名称 + 可选说明 + 箭头，整行打开同一目标。 */
     public View row(String label, String sub, String icon, Runnable action) {
-        return navigationRow(label, sub, icon, false, action);
+        return navigationRow(label, sub, icon, false, null, action);
     }
 
     /** 插件库入口：与普通功能共享布局，以暖金底色突出。 */
     public View highlightedRow(String label, String icon, Runnable action) {
-        return navigationRow(label, "", icon, true, action);
+        return navigationRow(label, "", icon, true, null, action);
     }
 
-    private View navigationRow(String label, String sub, String icon, boolean highlighted, Runnable action) {
+    /** 同页展开入口：不省略内容，读屏同时说明当前展开状态。 */
+    public View disclosure(String label, String sub, boolean expanded, Runnable action) {
+        return navigationRow(label, sub, "", false, expanded, action);
+    }
+
+    private View navigationRow(String label, String sub, String icon, boolean highlighted,
+                               Boolean expanded, Runnable action) {
         LinearLayout r = new LinearLayout(activity);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
@@ -306,11 +323,13 @@ public final class WorkshopUi {
         r.addView(copy(label, sub),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         ImageView chevron = iconView("chevron", CHEVRON, WEAK);
+        if (expanded != null) chevron.setRotation(expanded ? -90f : 90f);
         LinearLayout.LayoutParams chevronParams =
                 new LinearLayout.LayoutParams(dp(CHEVRON), dp(CHEVRON));
         chevronParams.leftMargin = dp(4);
         r.addView(chevron, chevronParams);
-        r.setContentDescription(describe(label, sub));
+        r.setContentDescription(describe(label, sub)
+                + (expanded == null ? "" : expanded ? "，已展开，点按收起" : "，已收起，点按展开"));
         final Runnable tap = action;
         r.setOnClickListener(v -> tap.run());
         return add(r);

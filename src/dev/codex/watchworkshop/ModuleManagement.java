@@ -19,6 +19,9 @@ interface ModuleManagement {
     State managementState();
     String uninstallMessage();
 
+    /** 页面可明确区分运行组件与导入包，动作与权限仍使用同一契约。 */
+    default String actionLabel(Action action) { return action.label; }
+
     /** 由 request 检查最新能力后调用；INSTALL 可以先打开现有安装确认页。 */
     void executeManagement(Action action);
 

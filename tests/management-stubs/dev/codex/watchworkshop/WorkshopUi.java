@@ -49,6 +49,29 @@ final class WorkshopUi {
     final List<Note> notes = new ArrayList<>();
     final List<Button> buttons = new ArrayList<>();
     final List<String> titles = new ArrayList<>();
+    final List<String> captions = new ArrayList<>();
+    final List<Row> rows = new ArrayList<>();
+    final List<Row> disclosures = new ArrayList<>();
+
+    static final class Row {
+        final String label;
+        final Runnable action;
+        boolean enabled = true;
+        Row(String label, Runnable action) { this.label = label; this.action = action; }
+        Row setEnabled(boolean value) { enabled = value; return this; }
+    }
+
+    Row row(String label, String sub, String icon, Runnable action) {
+        Row row = new Row(label, action);
+        rows.add(row);
+        return row;
+    }
+
+    Row disclosure(String label, String sub, boolean expanded, Runnable action) {
+        Row row = new Row(label, action);
+        disclosures.add(row);
+        return row;
+    }
 
     void headerToggle(String title, Runnable back, Boolean checked, boolean enabled,
             Runnable action) {
@@ -61,6 +84,10 @@ final class WorkshopUi {
 
     void note(String value, String tone) {
         notes.add(new Note(value, tone));
+    }
+
+    void caption(String value) {
+        captions.add(value);
     }
 
     void title(String value) {

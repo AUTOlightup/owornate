@@ -7,3 +7,8 @@
 /plugins/examples/**/hook.js text eol=lf
 /plugins/launcher/**/hook.js text eol=lf
 /plugins/launcher/**/theme.jar -text
+/plugins/alipay-tap/*.sh text eol=lf
+/plugins/alipay-tap/*.js text eol=lf
+/plugins/alipay-global/*.sh text eol=lf
+/plugins/alipay-global/*.js text eol=lf
+/plugins/alipay-global/plugin.json text eol=lf

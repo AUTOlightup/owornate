@@ -107,7 +107,7 @@ public final class UpdateActivity extends WatchActivity {
             busy = false;
             if (problem != null) { status = ""; error = message(problem); render(); return; }
             if (!id.isEmpty()) {
-                startActivity(new Intent(this, PluginActivity.class).putExtra("pendingUpdate", token)
+                startActivity(PluginActivity.managementIntent(this, id).putExtra("pendingUpdate", token)
                         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
                 finish();
             } else {

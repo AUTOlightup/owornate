@@ -1,5 +1,8 @@
 # 源码与打包
 
+**2026-10-28 更新：1.0.1-rc29 / code38。** 管理器设置优先与直达导航，新增支付宝全局碰一下0.1.0，顶层附件共10个。完整源码包含 `plugins/alipay-global/` 及控制器测试；Windows包和更新清单均含四个功能插件。Launcher Hook、helper v6、三个既有插件及实际小组件 UI 不变。 验证范围见 [VALIDATION.md](VALIDATION.md)。下文旧版本状态均为历史。
+
+
 **2026-10-25 更新：管理器 1.0.1-rc27 / code36。** 本版调整管理器界面，运行 Hook、helper v6 与插件版本保持。构建与原生产表同签覆盖通过，实际小组件不改；验证边界以 [VALIDATION.md](VALIDATION.md) 首部为准。下文旧版本状态保留为历史记录。
 
 **当前公开版本：1.0.1-rc23 / code32。** 已于 2026-10-24 23:59（UTC+8）发布，发布页为 [v1.0.1-rc23](https://github.com/AUTOlightup/owornate/releases/tag/v1.0.1-rc23)，发布时 `main` 与 tag 指向 `440f6d4165d3671fd29a88be8a15f7fef27a3d35`；九附件线上大小、摘要和匿名公网下载 SHA-256 全部通过。code32 修复 A.92 上普通应用无法直接启动安装来源授权页的问题：仅在 `ActivityNotFoundException` 或 `SecurityException` 时回退标准应用信息页，仍要求用户手动授权并在返回后确认系统安装器。APK 为 341,073 bytes，SHA-256 `cc9126262425a90e9861667e24d0cf2ecd66abc494f197948e7d638f42a5a8fd`；原证书、非 debuggable 与许可资产检查通过，14 个 APK assets 与 code31 相同。详见 [Launcher 插件](LAUNCHER-PLUGINS.md) 与 [验证记录](VALIDATION.md)。

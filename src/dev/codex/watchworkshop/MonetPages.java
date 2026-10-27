@@ -260,8 +260,8 @@ final class MonetPages implements ModuleStatusView, ModuleManagement {
             sync();
             a.render();
             if (a.page.equals(PageIds.THEME)) {
-                if (state != null && !failed() && !state.installed()) a.leave(PageIds.THEME);
-                else if (reachable()) themeAction("preview");
+                // 未安装时留在主题页，保留安装入口；已安装再读取当前配色。
+                if (reachable()) themeAction("preview");
             }
         });
     }
@@ -587,7 +587,7 @@ final class MonetPages implements ModuleStatusView, ModuleManagement {
         dim(corners);
         statusNotes();
         ui.row("更多选项", "刷新配色、恢复上一次", "sliders", () -> a.go(PageIds.THEME_MORE));
-        managementUi.actions(ui, this, a::render);
+        managementUi.section(ui, this, a::render, a.pluginPackagePage("monet"));
     }
 
     /** 配色业务的补充提示；模块状态、读取错误和操作反馈由共用框架展示。 */
@@ -609,7 +609,6 @@ final class MonetPages implements ModuleStatusView, ModuleManagement {
                 canRollback && connected && reachable() && !a.working(),
                 () -> a.go(PageIds.THEME_RESTORE));
         ui.value("当前版本", "莫奈组件 v6");
-        ui.row("模块管理", "", "sliders", () -> a.go(PageIds.THEME));
     }
 
     private void themeRestore() {

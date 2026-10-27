@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "runtime": "shell-v1",
+  "permissions": ["root"],
+  "device": {
+    "model": "OW20W1",
+    "firmware": "OW20W1_11_A.92",
+    "sdk": 27,
+    "abi": "armeabi-v7a"
+  },
+  "id": "dev.owornate.alipay-global",
+  "name": "支付宝全局碰一下",
+  "description": "在真实 NFC 进程中监听普通 NfcA 标签，匹配后拉起原 OPPO 渠道支付宝 3152 的碰一下入口。需已安装 Frida 16.7.19 注入运行环境，保留系统钱包与 SE/AID 路由。可选择允许息屏或仅亮屏；命中后短震动 80ms。当前 NFC 进程会话内可接管，停用为惰性 Hook；NFC 进程或整表重启后需手动开启。实闸机与长期功耗未验收。",
+  "versionName": "0.1.0",
+  "versionCode": 1,
+  "settings": [
+    {
+      "key": "allow_screen_off",
+      "title": "息屏识别",
+      "type": "choice",
+      "default": "true",
+      "options": [
+        {
+          "value": "true",
+          "label": "允许息屏"
+        },
+        {
+          "value": "false",
+          "label": "仅亮屏"
+        }
+      ]
+    }
+  ]
+}

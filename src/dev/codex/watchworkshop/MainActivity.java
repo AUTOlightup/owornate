@@ -44,6 +44,7 @@ public final class MainActivity extends WatchActivity {
 
     final ArrayDeque<String> stack = new ArrayDeque<>();
     String page = PageIds.HOME;
+    private String returnPluginListPage = "";
     SharedPreferences prefs;
     MonetPages monet;
     WidgetPages widgets;
@@ -72,6 +73,7 @@ public final class MainActivity extends WatchActivity {
         observeWhileStarted(RuntimeStateStore.preferences(this), runtimeChanged);
         if (saved != null) {
             page = saved.getString("page", PageIds.HOME);
+            returnPluginListPage = saved.getString("returnPluginListPage", "");
             ArrayList<String> restored = saved.getStringArrayList("stack");
             if (restored != null) stack.addAll(restored);
             remember(page, saved.getInt("scroll", 0));
@@ -101,8 +103,30 @@ public final class MainActivity extends WatchActivity {
 
     private void openPluginSettings(android.content.Intent intent) {
         String feature = intent.getStringExtra("pluginFeature");
-        if ("monet".equals(feature)) go(PageIds.THEME);
-        else if ("widgets".equals(feature)) go(PageIds.WIDGETS);
+        String target = "monet".equals(feature) ? PageIds.THEME
+                : "widgets".equals(feature) ? PageIds.WIDGETS : "";
+        if (!target.isEmpty()) {
+            if (intent.getBooleanExtra("returnToPluginList", false)) returnPluginListPage = target;
+            else if (!target.equals(page)) returnPluginListPage = "";
+        }
+        openFeatureSettings(feature);
+    }
+
+    /** 官方功能始终进入原完整 native 设置；其他插件仍由 PluginActivity 展示。 */
+    private boolean openFeatureSettings(String feature) {
+        if ("monet".equals(feature)) {
+            go(PageIds.THEME);
+            return true;
+        }
+        if ("widgets".equals(feature)) {
+            go(PageIds.WIDGETS);
+            return true;
+        }
+        if ("capture".equals(feature)) {
+            startActivity(new android.content.Intent(this, CaptureSetupActivity.class));
+            return true;
+        }
+        return false;
     }
 
     private void registerModules() {
@@ -145,6 +169,34 @@ public final class MainActivity extends WatchActivity {
         startActivity(new android.content.Intent(this, PluginActivity.class).putExtra("pluginId", id));
     }
 
+    /** 官方功能导入包进入对应 native 设置；shell 和第三方 launcher 插件仍走插件详情。 */
+    private void openPlugin(PluginManifest plugin) {
+        if (plugin == null) {
+            openPlugin("");
+            return;
+        }
+        if (openFeatureSettings(plugin.feature())) return;
+        openPlugin(plugin.id);
+    }
+
+    private PluginManifest importedPlugin(String feature) {
+        if (feature == null || feature.isEmpty()) return null;
+        for (PluginManifest plugin : localPlugins) {
+            if (feature.equals(plugin.feature())) return plugin;
+        }
+        return null;
+    }
+
+    /** 已导入包对应元数据页；无包返回 null，页面只保留原生管理动作。 */
+    Runnable pluginPackagePage(String feature) {
+        PluginManifest plugin = importedPlugin(feature);
+        if (plugin == null) return null;
+        return () -> {
+            if (working()) return;
+            startActivity(PluginActivity.managementIntent(this, plugin.id));
+        };
+    }
+
     private PluginManifest importedFeature(ModuleItem item) {
         for (PluginManifest plugin : localPlugins) {
             if (!plugin.feature().isEmpty() && modules.get(plugin.feature()) == item) return plugin;
@@ -155,6 +207,7 @@ public final class MainActivity extends WatchActivity {
     @Override protected void onSaveInstanceState(Bundle b) {
         super.onSaveInstanceState(b);
         b.putString("page", page);
+        b.putString("returnPluginListPage", returnPluginListPage);
         b.putStringArrayList("stack", new ArrayList<>(stack));
         b.putInt("scroll", scrollY());
     }
@@ -204,14 +257,18 @@ public final class MainActivity extends WatchActivity {
             monet.finishResult();
             return;
         }
+        boolean returnToList = page.equals(returnPluginListPage);
+        if (returnToList) returnPluginListPage = "";
         if (stack.isEmpty()) {
             if (page.equals(PageIds.HOME) || page.equals(PageIds.WELCOME)) finish();
             else returnHome();
+            if (returnToList) startActivity(new android.content.Intent(this, PluginActivity.class));
             return;
         }
         page = stack.pop();
         render();
         if (page.equals(PageIds.HOME)) refresh(false);
+        if (returnToList) startActivity(new android.content.Intent(this, PluginActivity.class));
     }
 
     void go(String target) {
@@ -258,6 +315,7 @@ public final class MainActivity extends WatchActivity {
     }
 
     void returnHome() {
+        returnPluginListPage = "";
         stack.clear();
         page = PageIds.HOME;
         remember(PageIds.HOME, 0);
@@ -303,14 +361,14 @@ public final class MainActivity extends WatchActivity {
             if (item.status.showOnHome()) {
                 PluginManifest imported = importedFeature(item);
                 ui.row(item.title, "",
-                        item.icon, imported == null ? item.openHome : () -> openPlugin(imported.id));
+                        item.icon, imported == null ? item.openHome : () -> openPlugin(imported));
             }
         }
         readErrorNotes("warning");
         for (PluginManifest plugin : localPlugins) {
             ModuleItem nativeModule = modules.get(plugin.feature());
             if (nativeModule != null && nativeModule.status.showOnHome()) continue;
-            ui.row(plugin.name, "", "layers", () -> openPlugin(plugin.id));
+            ui.row(plugin.name, "", "layers", () -> openPlugin(plugin));
         }
         if (!pluginsError.isEmpty()) {
             ui.note("本地插件列表读取失败：" + pluginsError, "warning");
@@ -349,6 +407,6 @@ public final class MainActivity extends WatchActivity {
         PluginManifest imported = importedFeature(item);
         String subtitle = item.status.installed() && imported != null ? imported.versionName : "";
         ui.row(item.title, subtitle, item.icon,
-                imported == null ? item.openDiscover : () -> openPlugin(imported.id));
+                imported == null ? item.openDiscover : () -> openPlugin(imported));
     }
 }

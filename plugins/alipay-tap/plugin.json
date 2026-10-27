@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "runtime": "shell-v1",
+  "permissions": ["root"],
+  "device": {"model":"OW20W1","firmware":"OW20W1_11_A.92","sdk":27,"abi":"armeabi-v7a"},
+  "id": "dev.owornate.alipay-tap",
+  "name": "支付宝碰一下",
+  "description": "开启后打开支付宝，进入“碰一下”使用。支持 OPPO 渠道 10.6.41.260917，需已安装注入运行环境。本次支付宝进程内有效，进程结束后需重新开启；停用恢复原行为。测试时收付款应使用不同账号。已验证官方贴纸可进入输入金额页，完整付款及带屏幕蓝环待验证。",
+  "versionName": "0.1.0",
+  "versionCode": 1,
+  "settings": []
+}

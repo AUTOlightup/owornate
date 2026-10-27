@@ -17,6 +17,9 @@ public final class CaptureSetupActivity extends WatchActivity implements ModuleM
     private boolean installing;
     private String operationError = "";
     private String notice = "";
+    private PluginManifest capturePlugin;
+    private boolean pluginLoading;
+    private String pluginError = "";
     private StatusObservation<CaptureModuleState> observation;
     private final ModuleManagementUi managementUi = new ModuleManagementUi();
     private final SharedPreferences.OnSharedPreferenceChangeListener changed = (store, key) -> {
@@ -37,6 +40,7 @@ public final class CaptureSetupActivity extends WatchActivity implements ModuleM
     @Override protected void onStart() {
         super.onStart();
         sync();
+        loadCapturePlugin();
         render();
     }
 
@@ -46,6 +50,35 @@ public final class CaptureSetupActivity extends WatchActivity implements ModuleM
 
     private void sync() {
         observation = RuntimeStateStore.capture(this);
+    }
+
+    /** 导入包保存在管理器私有目录；每次可见时异步刷新，读取失败保留明确提示。 */
+    private void loadCapturePlugin() {
+        if (pluginLoading) return;
+        pluginLoading = true;
+        Context app = getApplicationContext();
+        inBackground(DeviceQueues.GENERAL,
+                () -> ExternalPlugins.repository(app).load(CaptureSettings.PLUGIN_ID), (plugin, problem) -> {
+            pluginLoading = false;
+            if (problem == null) {
+                capturePlugin = plugin;
+                pluginError = "";
+            } else {
+                capturePlugin = null;
+                pluginError = message(problem);
+            }
+            render();
+        });
+    }
+
+    /** 已导入包对应元数据页；无包返回 null，管理区仍保留原生动作。 */
+    private Runnable packagePage() {
+        final PluginManifest plugin = capturePlugin;
+        if (plugin == null) return null;
+        return () -> {
+            if (busy) return;
+            startActivity(PluginActivity.managementIntent(this, plugin.id));
+        };
     }
 
     @Override public String moduleTitle() {
@@ -211,8 +244,9 @@ public final class CaptureSetupActivity extends WatchActivity implements ModuleM
     private void render() {
         rebuild("capture-module", () -> {
             ModuleManagementUi.header(ui, this::onBackPressed, this);
-            ui.note("OWOrnate 功能模块 · 控制中心快捷入口");
-            ModuleManagementUi.status(ui, this);
+            ModuleManagementUi.status(ui, this, false);
+            if (managementState().can(Action.DISABLE)) ui.caption("停用会停止正在进行的录屏。");
+            if (!pluginError.isEmpty()) ui.note("导入包状态读取失败：" + pluginError, "warning");
             ui.title("功能设置");
             ui.row("截屏", "PNG · 保存位置与操作", "layers",
                     () -> startActivity(new Intent(this, CaptureScreenshotActivity.class)));
@@ -221,10 +255,12 @@ public final class CaptureSetupActivity extends WatchActivity implements ModuleM
                             Intent.FLAG_ACTIVITY_NEW_TASK
                                     | Intent.FLAG_ACTIVITY_MULTIPLE_TASK
                                     | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)));
+            String limitation = managementState().limitation;
+            if (!limitation.isEmpty()) ui.note(limitation);
             ui.value("快捷操作", "短按执行；长按打开 OWOrnate 对应页面");
             ui.value("录屏格式", "原屏 H.264 MP4 · 无声 · 帧率跟随屏幕");
             ui.value("模块版本", "运行组件 v2 · 控制中心接入 v13");
-            managementUi.actions(ui, this, this::render);
+            managementUi.section(ui, this, this::render, packagePage());
         });
     }
 }

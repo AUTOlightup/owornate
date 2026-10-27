@@ -2,6 +2,7 @@ package dev.codex.watchworkshop;
 
 import android.Manifest;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -30,24 +31,44 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
     private String selected = "", pendingToken = "", setting = "";
     private String error = "", operationError = "", notice = "";
     private boolean busy, confirmed, showDownloads;
+    private boolean managementOnly, returnToCaller;
+    private boolean descriptionExpanded, managementExpanded, technicalExpanded;
     private boolean configurationLoaded;
-    private String configurationError = "";
     private Boolean enabled;
     private LauncherPlugins.Snapshot launcherState;
 
     private boolean launcher() { return manifest != null && manifest.runtime.equals("launcher-v1"); }
-    private boolean monetSettings() { return manifest != null && MonetSettings.PLUGIN_ID.equals(manifest.id)
-            && !manifest.nativeSettings.isEmpty(); }
-    private boolean canConfigure() { return !busy && (launcher() ? configurationLoaded : confirmed); }
+    private boolean nativeFeature() { return launcher() && !manifest.launcherExtension(); }
+    private boolean canConfigure() { return !busy && confirmed; }
+
+    static Intent managementIntent(Context context, String id) {
+        return new Intent(context, PluginActivity.class).putExtra("pluginId", id)
+                .putExtra("managementOnly", true);
+    }
+
+    /** 已有完整原生设置的插件只有一个功能入口；其余继续使用声明式页面。 */
+    static Intent settingsIntent(Context context, PluginManifest plugin) {
+        if (PluginManifest.LAUNCHER_RUNTIME.equals(plugin.runtime) && !plugin.launcherExtension()) {
+            if ("capture".equals(plugin.feature())) return new Intent(context, CaptureSetupActivity.class);
+            return new Intent(context, MainActivity.class).putExtra("pluginFeature", plugin.feature());
+        }
+        return new Intent(context, PluginActivity.class).putExtra("pluginId", plugin.id);
+    }
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         repository = ExternalPlugins.repository(this);
         selected = saved == null ? getIntent().getStringExtra("pluginId") : saved.getString("pluginId", "");
         if (selected == null) selected = "";
+        managementOnly = saved == null ? getIntent().getBooleanExtra("managementOnly", false)
+                : saved.getBoolean("managementOnly");
+        returnToCaller = saved == null ? !selected.isEmpty() : saved.getBoolean("returnToCaller");
         if (saved != null) {
             pendingToken = saved.getString("pending", "");
             setting = saved.getString("setting", "");
+            descriptionExpanded = saved.getBoolean("descriptionExpanded");
+            managementExpanded = saved.getBoolean("managementExpanded");
+            technicalExpanded = saved.getBoolean("technicalExpanded");
         } else {
             String incoming = getIntent().getStringExtra("pendingUpdate");
             if (incoming != null) pendingToken = incoming;
@@ -65,6 +86,11 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
         saved.putString("pluginId", selected);
         saved.putString("pending", pendingToken);
         saved.putString("setting", setting);
+        saved.putBoolean("managementOnly", managementOnly);
+        saved.putBoolean("returnToCaller", returnToCaller);
+        saved.putBoolean("descriptionExpanded", descriptionExpanded);
+        saved.putBoolean("managementExpanded", managementExpanded);
+        saved.putBoolean("technicalExpanded", technicalExpanded);
     }
 
     @Override public void onBackPressed() {
@@ -73,7 +99,8 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
         if (!setting.isEmpty()) { setting = ""; render(); return; }
         if (showDownloads) { showDownloads = false; render(); return; }
         if (!selected.isEmpty()) {
-            managementUi = new ModuleManagementUi();
+            if (returnToCaller) { finish(); return; }
+            resetDetailSections();
             selected = "";
             manifest = null;
             error = "";
@@ -85,7 +112,6 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
     private void load() {
         busy = true;
         configurationLoaded = false;
-        configurationError = "";
         render();
         inBackground(DeviceQueues.GENERAL, () -> {
             Loaded result = new Loaded();
@@ -98,8 +124,7 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
                 result.manifest = repository.load(selected);
                 if (result.manifest == null) throw new java.io.IOException("插件已移除，请返回列表");
                 result.config = result.manifest.runtime.equals(PluginManifest.LAUNCHER_RUNTIME)
-                        ? (CaptureSettings.PLUGIN_ID.equals(result.manifest.id)
-                                ? CaptureSettings.config(this, result.manifest) : new LinkedHashMap<>())
+                        ? new LinkedHashMap<>()
                         : repository.config(selected);
             }
             return result;
@@ -115,7 +140,12 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
             pending = result.pending;
             if (pending == null) pendingToken = "";
             manifest = result.manifest;
-            if (manifest != null) { config = result.config; configurationLoaded = !monetSettings(); }
+            if (nativeFeature() && !managementOnly && pending == null) {
+                startActivity(settingsIntent(this, manifest));
+                finish();
+                return;
+            }
+            if (manifest != null) { config = result.config; configurationLoaded = true; }
             error = result.pendingError;
             render();
             if (manifest != null && pending == null) {
@@ -185,6 +215,7 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
             if (problem != null) { error = message(problem); render(); return; }
             pending = null;
             pendingToken = "";
+            resetDetailSections();
             selected = installed.id;
             manifest = installed;
             notice = installed.runtime.equals("launcher-v1")
@@ -192,6 +223,22 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
                     : "插件包已保存，配置与数据保留。启用前请检查设置。";
             confirmed = false;
             enabled = null;
+            if (nativeFeature()) {
+                android.widget.Toast.makeText(this, notice, android.widget.Toast.LENGTH_LONG).show();
+                Intent destination = settingsIntent(this, installed);
+                boolean returnToList = !returnToCaller;
+                if (returnToList && "capture".equals(installed.feature())) {
+                    // 采集页是独立 Activity，保留列表作为返回目标。
+                    selected = "";
+                    manifest = null;
+                    startActivity(destination);
+                } else {
+                    destination.putExtra("returnToPluginList", returnToList);
+                    startActivity(destination);
+                    finish();
+                }
+                return;
+            }
             load();
         });
     }
@@ -203,7 +250,11 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
         inBackground(DeviceQueues.GENERAL, () -> { repository.cancel(cancelled); return true; }, (ok, problem) -> {
             busy = false;
             if (problem != null) error = message(problem);
-            else { pending = null; pendingToken = ""; error = ""; }
+            else {
+                pending = null; pendingToken = ""; error = "";
+                load();
+                return;
+            }
             render();
         });
     }
@@ -247,13 +298,19 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
     @Override public State managementState() {
         if (launcher()) {
             EnumSet<Action> actions = launcherState == null ? EnumSet.of(Action.REFRESH) : launcherState.actions();
+            if (nativeFeature()) {
+                // 运行组件操作由完整功能页的原控制器处理；这里仅管理导入包。
+                actions.retainAll(EnumSet.of(Action.REFRESH, Action.UNINSTALL));
+            }
             return new State(true, launcherState == null ? null : launcherState.enabled, confirmed, busy,
                     launcherState == null ? "载荷已导入 · 部署状态待确认" : launcherState.text,
-                    error, operationError, notice, launcherState == null ? "" : launcherState.limitation(), actions);
+                    error, operationError, notice, launcherState == null ? ""
+                            : launcherState.owner.equals("shared") ? "共享环境；导入包尚未部署。"
+                            : launcherState.limitation(), actions);
         }
         EnumSet<Action> actions = EnumSet.of(Action.REFRESH);
         if (manifest != null) actions.addAll(EnumSet.of(Action.ENABLE, Action.DISABLE, Action.UNINSTALL));
-        String status = !confirmed ? "运行状态待确认" : Boolean.TRUE.equals(enabled) ? "已安装 · 已启用" : "已安装 · 已停用";
+        String status = !confirmed ? "状态待确认" : Boolean.TRUE.equals(enabled) ? "已启用" : "已停用";
         return new State(manifest != null, enabled, confirmed, busy, status, error, operationError,
                 notice, "", actions, true);
     }
@@ -263,6 +320,17 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
                 ? "先卸载此功能的自有运行载荷，确认后移除导入包。其他插件、主题、卡片和媒体保留。"
                 : "移除此导入包，保留数据；当前共享运行组件不受影响。";
         return "先运行插件的停用与卸载清理，确认停用后移除安装包。插件配置和数据保留；清理失败则保留安装包。";
+    }
+
+    @Override public String actionLabel(Action action) {
+        if (action == Action.UNINSTALL) {
+            if (!launcher()) return "卸载插件";
+            return launcherState != null && launcherState.installed && "own".equals(launcherState.owner)
+                    ? "卸载插件及组件" : "移除插件包";
+        }
+        if (launcher() && action == Action.UPDATE) return "更新运行组件";
+        if (launcher() && action == Action.INSTALL) return "部署运行组件";
+        return action.label;
     }
 
     @Override public void executeManagement(Action action) {
@@ -280,21 +348,9 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
         if (busy || !launcher()) return;
         String feature = manifest.feature();
         busy = true; error = ""; operationError = ""; notice = "";
-        boolean readTheme = monetSettings();
-        if (readTheme) { configurationLoaded = false; config.clear(); configurationError = ""; }
         render();
         android.content.Context app = getApplicationContext();
-        inBackground(DeviceQueues.GENERAL, () -> {
-            LauncherResult result = new LauncherResult();
-            result.state = LauncherPlugins.execute(app, feature, action);
-            if (readTheme && action != Action.UNINSTALL) {
-                if (Boolean.TRUE.equals(result.state.enabled)) {
-                    try { result.config = MonetSettings.config(app); }
-                    catch (Exception problem) { result.configError = message(problem); }
-                } else result.configError = "请先启用莫奈并重新读取状态。";
-            }
-            return result;
-        }, (result, problem) -> {
+        inBackground(DeviceQueues.GENERAL, () -> LauncherPlugins.execute(app, feature, action), (result, problem) -> {
             busy = false; confirmed = problem == null;
             if (problem != null) {
                 if (action == Action.REFRESH) error = message(problem);
@@ -304,43 +360,8 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
                 notice = "本地插件包已移除，配置与数据保留。";
                 load(); return;
             } else {
-                launcherState = result.state;
-                if (readTheme) {
-                    configurationError = result.configError;
-                    configurationLoaded = result.config != null;
-                    if (configurationLoaded) config = result.config;
-                }
+                launcherState = result;
                 if (action != Action.REFRESH) notice = "操作已完成，状态已重新确认。";
-            }
-            render();
-        });
-    }
-
-    private static final class LauncherResult {
-        LauncherPlugins.Snapshot state;
-        Map<String, String> config;
-        String configError = "";
-    }
-
-    private void configureLauncher(String key, String value) {
-        if (!canConfigure() || !launcher()) return;
-        String id = manifest.id;
-        busy = true; operationError = ""; notice = ""; configurationError = "";
-        render();
-        android.content.Context app = getApplicationContext();
-        inBackground(DeviceQueues.GENERAL, () -> MonetSettings.PLUGIN_ID.equals(id)
-                ? MonetSettings.configure(app, key, value)
-                : CaptureSettings.configure(app, id, java.util.Collections.singletonMap(key, value)), (values, problem) -> {
-            busy = false;
-            if (problem != null) {
-                operationError = message(problem);
-                if (monetSettings()) {
-                    configurationLoaded = false; confirmed = false; config.clear();
-                    configurationError = "设置未确认，请刷新状态后重试。";
-                }
-            } else {
-                config = values;
-                notice = monetSettings() ? "主题设置已应用并确认。" : "设置已保存，下一段录屏使用此画质。";
             }
             render();
         });
@@ -381,33 +402,36 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
                 : manifest == null ? "plugin-list" : "plugin:" + manifest.id + ":" + setting;
         rebuild(page, () -> {
             if (manifest != null && pending == null && !showDownloads && setting.isEmpty()) {
+                if (nativeFeature()) {
+                    ui.header("管理与更新", false, this::onBackPressed, null);
+                    ui.caption(manifest.name);
+                    ModuleManagementUi.status(ui, this);
+                    ui.value("插件包版本", manifest.versionName);
+                    checkUpdates();
+                    managementUi.actions(ui, this, this::render);
+                    description();
+                    technical();
+                    return;
+                }
                 ModuleManagementUi.header(ui, this::onBackPressed, this);
                 ModuleManagementUi.status(ui, this);
-                ui.note(manifest.description);
-                ui.value("版本", manifest.versionName);
-                ui.button("检查插件更新", false, !busy, () -> startActivity(
-                        new Intent(this, UpdateActivity.class).putExtra("pluginId", manifest.id)));
-                if (launcher() && !manifest.launcherExtension()) {
-                    ui.note(manifest.nativeSettings.isEmpty() ? "载荷来自导入包；功能设置由管理器提供。"
-                            : monetSettings() ? "选项来自插件包，选择后应用到当前主题。固定颜色与预览可在功能设置中调整。"
-                            : "画质选项来自插件包，保存后用于下一段录屏。");
-                    ui.button("打开功能设置", false, !busy, () -> {
-                        if (manifest.feature().equals("capture")) startActivity(new Intent(this, CaptureSetupActivity.class));
-                        else startActivity(new Intent(this, MainActivity.class).putExtra("pluginFeature", manifest.feature()));
-                    });
-                } else if (launcher()) {
-                    ui.note("此插件在 Launcher 内运行；启停、更新和卸载共用管理器运行环境。");
-                }
-                if (!configurationError.isEmpty()) ui.note(configurationError, "warning");
-                for (PluginManifest.Setting item : manifest.displaySettings()) {
-                    ui.row(item.title, configurationLoaded ? item.options.get(config.get(item.key)) : "待读取", "sliders", () -> {
+                for (PluginManifest.Setting item : manifest.settings) {
+                    ui.row(item.title, configurationLoaded ? item.options.get(config.get(item.key)) : "待读取", "", () -> {
                         if (canConfigure()) { setting = item.key; render(); }
                     }).setEnabled(canConfigure());
                 }
-                managementUi.actions(ui, this, this::render);
+                description();
+                ui.disclosure("管理与更新", manifest.versionName, managementExpanded, () -> {
+                    managementExpanded = !managementExpanded; render();
+                });
+                if (managementExpanded) {
+                    checkUpdates();
+                    managementUi.actions(ui, this, this::render);
+                }
+                technical();
                 return;
             }
-            ui.header(pending != null ? "确认导入" : showDownloads ? "下载目录" : "本地插件",
+            ui.header(pending != null ? "确认导入" : showDownloads ? "下载目录" : settingTitle(),
                     false, this::onBackPressed, null);
             if (!error.isEmpty()) ui.note(error, "warning");
             if (!notice.isEmpty()) ui.note(notice);
@@ -443,23 +467,26 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
                 if (downloads.isEmpty()) ui.note("下载目录中没有 .owo 插件包。");
                 ui.button("刷新目录", false, !busy, this::openDownloads);
             } else if (manifest != null && !setting.isEmpty()) {
-                for (PluginManifest.Setting item : manifest.displaySettings()) {
+                for (PluginManifest.Setting item : manifest.settings) {
                     if (!item.key.equals(setting)) continue;
-                    ui.title(item.title);
                     for (Map.Entry<String, String> option : item.options.entrySet()) {
                         ui.choice(option.getValue(), "", option.getKey().equals(config.get(item.key)), () -> {
                             if (!canConfigure()) return;
                             Map<String, String> next = new LinkedHashMap<>(config);
                             next.put(item.key, option.getKey());
                             setting = "";
-                            if (launcher()) configureLauncher(item.key, option.getKey());
-                            else run("configure", next);
+                            run("configure", next);
                         }).setEnabled(canConfigure());
                     }
                 }
             } else {
                 for (PluginManifest item : plugins) ui.row(item.name, item.versionName, "layers", () -> {
                     if (busy) return;
+                    if (PluginManifest.LAUNCHER_RUNTIME.equals(item.runtime) && !item.launcherExtension()) {
+                        startActivity(settingsIntent(this, item).putExtra("returnToPluginList", true));
+                        return;
+                    }
+                    resetDetailSections();
                     selected = item.id; confirmed = false; enabled = null; launcherState = null; notice = ""; load();
                 });
                 if (plugins.isEmpty()) ui.note("尚未导入本地插件。");
@@ -468,5 +495,44 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
                 ui.button("刷新列表", false, !busy, this::load);
             }
         });
+    }
+
+    private String settingTitle() {
+        if (manifest != null) for (PluginManifest.Setting item : manifest.settings) {
+            if (item.key.equals(setting)) return item.title;
+        }
+        return "本地插件";
+    }
+
+    private void checkUpdates() {
+        ui.button("检查插件包更新", false, !busy, () -> startActivity(
+                new Intent(this, UpdateActivity.class).putExtra("pluginId", manifest.id)));
+    }
+
+    private void description() {
+        ui.disclosure("插件说明", "", descriptionExpanded, () -> {
+            descriptionExpanded = !descriptionExpanded; render();
+        });
+        if (descriptionExpanded) ui.caption(manifest.description);
+    }
+
+    private void technical() {
+        ui.disclosure("技术信息", "", technicalExpanded, () -> {
+            technicalExpanded = !technicalExpanded; render();
+        });
+        if (!technicalExpanded) return;
+        ui.value("插件标识", manifest.id);
+        ui.value("运行方式", manifest.runtime);
+        ui.value("版本代码", String.valueOf(manifest.versionCode));
+        if (!manifest.updateUrl.isEmpty()) ui.value("更新源", manifest.updateUrl);
+        if (launcher()) ui.caption("在 Launcher 内运行，启停与部署由管理器处理。");
+        if (launcherState != null && !launcherState.limitation().isEmpty()) {
+            ui.caption(launcherState.limitation());
+        }
+    }
+
+    private void resetDetailSections() {
+        descriptionExpanded = managementExpanded = technicalExpanded = false;
+        managementUi = new ModuleManagementUi();
     }
 }

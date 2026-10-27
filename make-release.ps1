@@ -30,6 +30,10 @@ $payload=[ordered]@{}; $payload[$apkName]="dist/$apkName"
 foreach($name in $payload.Keys){Copy-Item -LiteralPath (Join-Path $project $payload[$name]) -Destination (Join-Path $bundle "payload/$name")}
 Copy-Item -LiteralPath $FridaInject -Destination "$bundle/payload/frida-inject"
 & (Join-Path $project 'plugins/pack-launcher-plugins.ps1') -OutputDirectory "$bundle/payload/plugins"
+$alipayManifest=Get-Content -LiteralPath "$project/plugins/alipay-global/plugin.json" -Raw -Encoding UTF8|ConvertFrom-Json
+$alipayPackage=Join-Path $releaseFull ('alipay-global-'+$alipayManifest.versionName+'.owo')
+& (Join-Path $project 'plugins/alipay-global/build.ps1') -OutputFile $alipayPackage
+Copy-Item -LiteralPath $alipayPackage -Destination "$bundle/payload/plugins"
 foreach($name in @('adb.exe','AdbWinApi.dll','AdbWinUsbApi.dll','libwinpthread-1.dll','NOTICE.txt','source.properties')){Copy-Item -LiteralPath (Join-Path $AdbDirectory $name) -Destination "$bundle/tools/adb/$name"}
 Get-ChildItem -LiteralPath "$project/assets/licenses" -File|ForEach-Object{Copy-Item -LiteralPath $_.FullName -Destination "$bundle/licenses"}
 Copy-Item -LiteralPath "$project/LICENSE" -Destination "$bundle/LICENSE"
@@ -55,6 +59,13 @@ foreach($name in @('PLUGIN-DEVELOPMENT.md','PLUGIN-QUICKSTART.md','LAUNCHER-PLUG
     Copy-Item -LiteralPath "$project/docs/$name" -Destination "$source/docs/$name"
     Copy-Item -LiteralPath "$project/docs/$name" -Destination "$bundle/docs/$name"
 }
+# Windows users get the packages; implementation sources live in the source archive/tag.
+$guidePath=Join-Path $bundle 'docs/PLUGIN-DEVELOPMENT.md'
+$guideText=[IO.File]::ReadAllText($guidePath,[Text.Encoding]::UTF8)
+foreach($name in @('alipay-tap','alipay-global')){
+    $guideText=$guideText.Replace("(../plugins/$name/README.md)","(https://github.com/AUTOlightup/owornate/blob/v$version/plugins/$name/README.md)")
+}
+[IO.File]::WriteAllText($guidePath,$guideText,[Text.UTF8Encoding]::new($false))
 # Keep the example links in the bundled developer guide usable offline.
 New-Item -ItemType Directory -Path "$bundle/plugins/examples/screen-timeout" -Force|Out-Null
 foreach($name in @('plugin.json','plugin.sh')){

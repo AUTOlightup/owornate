@@ -418,7 +418,7 @@ final class WidgetPages implements ModuleStatusView, ModuleManagement {
         ui.button(openingEditor ? "正在打开…" : "打开系统卡片编辑页", false,
                 on() && !a.working() && !failed(), this::openEditor);
         if (on()) breenoSection();
-        managementUi.actions(ui, this, a::render);
+        managementUi.section(ui, this, a::render, a.pluginPackagePage("widgets"));
     }
 
     /** 管理页顶部：读取失败、尚未接入或加载未确认时的说明。 */

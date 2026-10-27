@@ -19,10 +19,14 @@ public final class ModuleManagementTest {
         run("shared widgets 显示开启但不提供切换", ModuleManagementTest::sharedWidgetsSnapshot);
         run("update 的未知启停值仍可更新", ModuleManagementTest::updateWithUnknownEnabled);
         run("busy 禁止全部操作", ModuleManagementTest::busyBlocksAllActions);
+        run("正常状态用 caption，错误与通知保留且不重复",
+                ModuleManagementTest::statusPresentation);
         run("旧按钮回调不能越过新状态", ModuleManagementTest::staleButtonCallback);
         run("启停不乐观修改模块状态", ModuleManagementTest::toggleIsNotOptimistic);
         run("卸载需要二次确认", ModuleManagementTest::uninstallNeedsConfirmation);
         run("卸载确认时重新核验状态", ModuleManagementTest::uninstallConfirmationRechecksState);
+        run("插件包文案沿用卸载确认与同一动作", ModuleManagementTest::packageActionLabel);
+        run("管理折叠保留原控制器的恢复能力与忙碌门控", ModuleManagementTest::managementSection);
         run("普通页与 managed 页注册路由", ModuleManagementTest::pageRegistration);
         run("actions 快照不受原集合修改影响", ModuleManagementTest::actionsSnapshot);
         run("外部插件错误态允许尝试清理，忙碌时仍禁止", ModuleManagementTest::pluginCleanup);
@@ -37,6 +41,45 @@ public final class ModuleManagementTest {
         State busy = new State(true, null, false, true, "", "bad script", "", "", "",
                 EnumSet.of(Action.UNINSTALL), true);
         check(!busy.can(Action.UNINSTALL), "不能重叠清理");
+    }
+
+    private static void packageActionLabel() {
+        TestModule module = new TestModule(state(true, true, true, false, "",
+                Action.REFRESH, Action.UNINSTALL));
+        module.packageLabels = true;
+        WorkshopUi ui = new WorkshopUi();
+        ModuleManagementUi management = new ModuleManagementUi();
+        Runnable[] render = new Runnable[1];
+        render[0] = () -> management.actions(ui, module, render[0]);
+        render[0].run();
+        check(ui.lastButton("移除插件包") != null, "应显示导入包的准确动作名称");
+        ui.lastButton("移除插件包").action.run();
+        check(module.executed.isEmpty(), "更改文案不能跳过确认");
+        ui.lastButton("确认卸载").action.run();
+        check(module.executed.equals(Arrays.asList(Action.UNINSTALL)), "确认后仍执行原卸载动作");
+    }
+
+    private static void managementSection() {
+        TestModule module = new TestModule(state(true, true, true, false, "",
+                Action.RECONNECT, Action.REPAIR, Action.REFRESH));
+        WorkshopUi ui = new WorkshopUi();
+        ModuleManagementUi management = new ModuleManagementUi();
+        AtomicInteger packageVisits = new AtomicInteger();
+        Runnable[] render = new Runnable[1];
+        render[0] = () -> management.section(ui, module, render[0], packageVisits::incrementAndGet);
+        render[0].run();
+        check(ui.buttons.isEmpty(), "默认收起管理动作");
+        ui.disclosures.get(0).action.run();
+        check(ui.lastButton(Action.RECONNECT.label) != null, "包管理不能挤掉重新接入");
+        check(ui.lastButton(Action.REPAIR.label) != null, "包管理不能挤掉原修复能力");
+        ui.lastButton(Action.RECONNECT.label).action.run();
+        check(module.executed.equals(Arrays.asList(Action.RECONNECT)), "仍通过原控制器执行恢复");
+        WorkshopUi.Row packageRow = ui.rows.get(0);
+        packageRow.action.run();
+        check(packageVisits.get() == 1, "可单独进入插件包管理");
+        module.change(state(true, true, true, true, "", Action.REFRESH));
+        packageRow.action.run();
+        check(packageVisits.get() == 1, "旧入口不能越过新的忙碌状态");
     }
 
     private static void run(String name, Runnable test) {
@@ -174,6 +217,44 @@ public final class ModuleManagementTest {
         check(module.executed.isEmpty(), "状态变化后旧更新回调不能写入");
     }
 
+    private static void statusPresentation() {
+        ModuleManagementUi management = new ModuleManagementUi();
+
+        WorkshopUi normalUi = new WorkshopUi();
+        management.status(normalUi,
+                new TestModule(displayState("测试状态", "", "", "")));
+        check(normalUi.captions.contains("测试状态"), "正常状态应显示为 caption");
+        check(normalUi.notes.isEmpty(), "正常状态不应再占用 note");
+
+        WorkshopUi readFailedUi = new WorkshopUi();
+        management.status(readFailedUi, new TestModule(
+                displayState("测试状态", "读取超时", "读取超时", "已重新连接")));
+        check(readFailedUi.hasNote("读取状态失败：读取超时"), "读取错误仍应可见");
+        check(readFailedUi.hasNote("已重新连接"), "通知仍应可见");
+        check(!readFailedUi.hasNote("操作未完成：读取超时"), "同一错误不能重复显示");
+        check(readFailedUi.captions.contains("测试状态"), "错误态仍应保留状态说明");
+
+        WorkshopUi writeFailedUi = new WorkshopUi();
+        management.status(writeFailedUi, new TestModule(
+                displayState("测试状态", "读取超时", "写入失败", "")));
+        check(writeFailedUi.hasNote("读取状态失败：读取超时"), "读取错误仍应可见");
+        check(writeFailedUi.hasNote("操作未完成：写入失败"), "不同错误应分别显示");
+
+        WorkshopUi deferredUi = new WorkshopUi();
+        State limited = new State(true, true, true, false, "已启用", "读取失败", "写入失败", "",
+                "限制说明", EnumSet.of(Action.REFRESH));
+        ModuleManagementUi.status(deferredUi, new TestModule(limited), false);
+        check(!deferredUi.hasNote("限制说明"), "长篇限制可由页面放在设置之后");
+        check(deferredUi.hasNote("读取状态失败：读取失败"), "移动限制不能隐藏读取错误");
+        check(deferredUi.hasNote("操作未完成：写入失败"), "移动限制不能隐藏操作错误");
+    }
+
+    private static State displayState(String status, String readError,
+            String operationError, String notice) {
+        return new State(true, null, true, false, status, readError, operationError,
+                notice, "", actions(Action.REFRESH));
+    }
+
     private static void toggleIsNotOptimistic() {
         State disabled = state(true, false, true, false, "",
                 Action.REFRESH, Action.ENABLE, Action.DISABLE);
@@ -304,6 +385,7 @@ public final class ModuleManagementTest {
 
     private static final class TestModule implements ModuleManagement {
         private State state;
+        boolean packageLabels;
         final List<Action> executed = new ArrayList<>();
 
         TestModule(State state) {
@@ -324,6 +406,10 @@ public final class ModuleManagementTest {
 
         @Override public String uninstallMessage() {
             return "卸载会先停止录制；媒体和配置保留。";
+        }
+
+        @Override public String actionLabel(Action action) {
+            return packageLabels && action == Action.UNINSTALL ? "移除插件包" : action.label;
         }
 
         @Override public void executeManagement(Action action) {

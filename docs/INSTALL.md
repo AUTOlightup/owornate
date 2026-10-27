@@ -1,6 +1,6 @@
 # 安装、首次设置与插件导入
 
-**当前版本：1.0.1-rc27 / code36。** 本版更新管理器界面，沿用既有首次设置、插件导入和手动安装来源授权流程。运行载荷、三个官方包及实际小组件 UI 保持。验证范围见 [验证记录](VALIDATION.md)。
+**当前版本：1.0.1-rc29 / code38。** 本版改进插件设置与导航，并提供支付宝全局碰一下。验证范围见 [验证记录](VALIDATION.md)。
 
 ## 适用范围
 
@@ -10,12 +10,12 @@ launcher-v1 保留莫奈、小组件、捕获三个官方接口，并接受第�
 
 ## 正式分发内容
 
-本次 rc27 正式维持 9 个顶层正式附件：管理器 APK、Windows 包、管理器源码包、莫奈 helper 源码包、三个官方 `.owo`、`owornate-updates.json` 和 `SHA256SUMS.txt`。文件名随 rc27 重命名，三个官方包版本不变。实际归档和摘要核对属于发布流程；文件名与验收边界见 [GitHub 发布说明](GITHUB-RELEASE.md)。
+本次 rc29 正式维持 10 个顶层正式附件：管理器 APK、Windows 包、管理器源码包、莫奈 helper 源码包、四个功能 `.owo`、`owornate-updates.json` 和 `SHA256SUMS.txt`。文件名随 rc29 重命名，三个既有官方包版本不变，新增支付宝全局碰一下0.1.0。实际归档和摘要核对属于发布流程；文件名与验收边界见 [GitHub 发布说明](GITHUB-RELEASE.md)。
 
 Windows 包完整解压后包含：
 
 ```text
-OWOrnate-v1.0.1-rc27-Windows/
+OWOrnate-v1.0.1-rc29-Windows/
   00-Setup.cmd
   01-Status.cmd
   02-EnableWidgets.cmd
@@ -25,18 +25,23 @@ OWOrnate-v1.0.1-rc27-Windows/
   docs/
   licenses/
   tools/adb/
-  payload/OWOrnate-v1.0.1-rc27.apk
+  payload/OWOrnate-v1.0.1-rc29.apk
   payload/frida-inject
   payload/plugins/monet-1.1.0.owo
   payload/plugins/widgets-1.0.0.owo
   payload/plugins/capture-1.1.0.owo
+  payload/plugins/alipay-global-0.1.0.owo
   plugins/examples/screen-timeout/
   plugins/examples/launcher-keep-awake/
 ```
 
 `plugins/examples/launcher-keep-awake/` 提供第三方示例源码和可直接导入的 `launcher-keep-awake-1.0.1.owo`。该示例不占顶层正式附件，也不进入官方更新清单。插件创建、校验、打包和独立清单工具只随完整管理器源码包提供。
 
-公开 APK 为 `OWOrnate-v1.0.1-rc27.apk`：341,073 bytes，SHA-256 `b54aa93e9b6aa337ff8121f171f04eb76dbd74a1bdeccb6da7ae083f925be317`。它沿用原证书并保持非 debuggable；许可资产检查通过，14 个 APK assets 与 code35 相同。发布校验以本版发布记录为准。
+公开 APK 为 `OWOrnate-v1.0.1-rc29.apk`：345,169 bytes，SHA-256 `f72b77fa445179d42ef1484dc32523d00455df33bce64c973f0079229a22121a`。它沿用原证书并保持非 debuggable；许可资产检查通过，原签名、非 debuggable 和许可检查通过；62 项资源／assets 与 code37 一致。发布校验以本版发布记录为准。
+
+## 支付宝全局碰一下
+
+自行准备原 OPPO 渠道支付宝3152及 Frida16.7.19 环境，再导入 `alipay-global-0.1.0.owo` 并启用。默认允许息屏，命中后短震动并打开原支付宝；重启手表或 NFC 后需手动重新开启。详见 [碰一下使用说明](ALIPAY-GLOBAL.md)。
 
 ## 电脑首次设置
 
