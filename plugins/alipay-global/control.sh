@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# shell-v1 adapter for the already verified NFC-process R6. No resident shell.
+# shell-v1 adapter for NFC-process R6, with an owned process-restart watcher.
 set -eu
 umask 077
 : "${OW_PLUGIN_DATA:?missing plugin data directory}"
@@ -9,6 +9,10 @@ LEGACY=/data/local/tmp/alipay-global-tap
 ATTEMPT="$OW_PLUGIN_DATA/nfc-session"
 PAYLOAD="$OW_PLUGIN_DATA/global-tap.js"
 REVISION=6
+AUTO_ENABLED="$OW_PLUGIN_DATA/auto-enabled"
+AUTO_SETTING="$OW_PLUGIN_DATA/auto-screen-off"
+WATCH_PID="$OW_PLUGIN_DATA/watch-pid"
+SCRIPT=$(readlink -f "$0")
 
 fail() { echo "$1" >&2; exit 1; }
 report() { echo "OWORNATE_PLUGIN_V1 $1"; }
@@ -38,6 +42,9 @@ attempted() {
 }
 probe() {
     process_identity || return 1
+    # A persisted snapshot may reuse the numeric PID after reboot. The owned
+    # boot/PID/start record determines whether it belongs to this process.
+    if [ -f "$ATTEMPT" ] && [ "$(cat "$ATTEMPT")" != "$identity" ]; then return 1; fi
     read_state && return 0
     if [ -f "$STATE" ] && grep -q '"pid":'"$pid"'[,}]' "$STATE"; then
         fail '当前 NFC Hook 的版本或就绪状态无法确认，请勿重复注入'
@@ -90,7 +97,7 @@ status() {
         report disabled
     fi
 }
-enable() {
+enable_core() {
     setting
     info=$(timeout 2 dumpsys package com.eg.android.AlipayGphone) || fail '无法读取支付宝版本'
     printf '%s' "$info" | grep -q 'versionCode=3152 ' || fail '仅支持 OPPO 支付宝 10.6.41.260917（3152）'
@@ -122,9 +129,86 @@ enable() {
     # Adoption also preserves the process identity without reinjecting a live R6.
     printf '%s\n' "$identity" > "$ATTEMPT.next"
     mv "$ATTEMPT.next" "$ATTEMPT"
+}
+
+watcher_running() {
+    [ -r "$WATCH_PID" ] || return 1
+    watch_pid=$(cat "$WATCH_PID")
+    numeric "$watch_pid" || return 1
+    kill -0 "$watch_pid" 2>/dev/null || return 1
+    watch_command=$(tr '\000' ' ' < "/proc/$watch_pid/cmdline" 2>/dev/null) || return 1
+    case "$watch_command" in *"$SCRIPT watch"*) return 0;; *) return 1;; esac
+}
+start_watcher() {
+    watcher_running && return
+    (trap '' HUP; exec sh "$SCRIPT" watch) </dev/null > "$OW_PLUGIN_DATA/watch.log" 2>&1 &
+    watch_pid=$!
+    printf '%s\n' "$watch_pid" > "$WATCH_PID"
+    kill -0 "$watch_pid" 2>/dev/null || fail '自动恢复守护启动失败'
+}
+stop_watcher() {
+    if watcher_running; then kill "$watch_pid" 2>/dev/null || true; fi
+    rm -f "$WATCH_PID"
+}
+remember_auto() {
+    printf '%s\n' "$allow_off" > "$AUTO_SETTING.next"
+    mv "$AUTO_SETTING.next" "$AUTO_SETTING"
+    : > "$AUTO_ENABLED"
+}
+enable() {
+    enable_core
+    remember_auto
+    start_watcher
     report_state
 }
+
+nfc_ready() { timeout 2 dumpsys nfc 2>/dev/null | grep -q '^mState=on'; }
+restore() {
+    setting
+    remember_auto
+    start_watcher
+    if nfc_ready; then enable_core; report_state; else report disabled; fi
+}
+recover() {
+    [ -f "$AUTO_ENABLED" ] || { report disabled; return; }
+    OW_SETTING_allow_screen_off=$(cat "$AUTO_SETTING")
+    nfc_ready || return 1
+    enable_core
+    report_state
+}
+watch() {
+    seen=; attempts=0
+    lock="$OW_PLUGIN_DATA/.operation-lock"
+    owns_lock=false
+    trap 'if [ "$owns_lock" = true ]; then rm -f "$lock/boot"; rmdir "$lock" 2>/dev/null || true; fi; if [ "$(cat "$WATCH_PID" 2>/dev/null)" = "$$" ]; then rm -f "$WATCH_PID"; fi' 0
+    trap 'exit 0' TERM INT
+    # Let enable/restore finish and the manager confirm status before monitoring.
+    sleep 10
+    while [ -f "$AUTO_ENABLED" ]; do
+        if process_identity; then
+            if [ "$seen" != "$identity" ]; then seen="$identity"; attempts=0; fi
+            if [ "$attempts" -lt 3 ] && nfc_ready && mkdir "$lock" 2>/dev/null; then
+                owns_lock=true
+                printf '%s\n' "$boot" > "$lock/boot"
+                if [ -f "$AUTO_ENABLED" ]; then
+                    if timeout -k 1 18 sh "$SCRIPT" recover > "$OW_PLUGIN_DATA/recover.log" 2>&1; then
+                        attempts=3
+                    else
+                        attempts=$((attempts+1))
+                    fi
+                fi
+                rm -f "$lock/boot"
+                rmdir "$lock" 2>/dev/null || true
+                owns_lock=false
+            fi
+        fi
+        # A normal sleep has no wake lock/alarm; suspended AP time does not force wakes.
+        sleep 10
+    done
+}
 disable() {
+    rm -f "$AUTO_ENABLED"
+    stop_watcher
     if probe; then
         send_command disable false
         ! has enabled || fail 'NFC 未确认停用'
@@ -141,14 +225,23 @@ configure() {
             if [ "$allow_off" = true ]; then has allowScreenOff || fail '息屏配置未确认';
             else ! has allowScreenOff || fail '亮屏配置未确认'; fi
         fi
+        if [ -f "$AUTO_ENABLED" ]; then
+            printf '%s\n' "$allow_off" > "$AUTO_SETTING.next"
+            mv "$AUTO_SETTING.next" "$AUTO_SETTING"
+        fi
         report_state
     else
+        if [ -f "$AUTO_ENABLED" ]; then
+            printf '%s\n' "$allow_off" > "$AUTO_SETTING.next"
+            mv "$AUTO_SETTING.next" "$AUTO_SETTING"
+        fi
         report disabled
     fi
 }
 uninstall() {
     disable >/dev/null
     rm -f "$PAYLOAD" "$OW_PLUGIN_DATA/inject.log" "$ATTEMPT.next"
+    rm -f "$AUTO_SETTING" "$AUTO_SETTING.next" "$OW_PLUGIN_DATA/watch.log" "$OW_PLUGIN_DATA/recover.log"
     # Retain session/compat markers and NFC-owned state until that process exits.
     # A disabled hook is deliberately inert, never hot-unloaded or stacked.
     report disabled

@@ -40,6 +40,7 @@ plugin.sh
 | name / description / versionName | 非空白字符串，分别最多 60 / 800 / 40 字符 |
 | versionCode | 正整数；同 ID 升级要求严格增大 |
 | updateUrl | 可选 HTTPS 更新清单或 GitHub releases API 地址；省略时使用管理器默认仓库，详见更新协议 |
+| restoreOnBoot | code39 起可选布尔值，默认 false，仅 shell-v1 可声明 true；要求实现下述 restore 动作 |
 | settings | 必须提供数组，可为空；最多 12 项 |
 
 所有层级只接受协议中的字段。每项设置有 key、title、type、default、options：
@@ -70,7 +71,7 @@ plugin.sh
 
 [支付宝碰一下](../plugins/alipay-tap/README.md) 使用本协议按需加载独立应用进程内的 Hook：控制器短时退出，目标进程通过 FileObserver 接收启停。状态回执必须匹配当前进程与会话；停用恢复本插件的行为，卸载解绑自己安装的方法。它不属于 launcher-v1，不修改共享 Launcher，也不提供自动重新注入或开机恢复。插件包仍只有 plugin.json 与 plugin.sh 两个文件。
 
-[支付宝全局碰一下](../plugins/alipay-global/README.md) 则封装已验证的 NFC 进程 R6，使用受权限保护的广播及逐次 requestId 确认启停，可接管原型的兼容会话。它仍使用 shell-v1，不修改管理器或共享 Launcher；停用后方法透传，惰性 Hook 随目标进程退出而移除，卸载保留防重复注入所需的会话标记。手表开机或 NFC 进程重启后需手动重新开启。用户需自行准备原 OPPO 渠道支付宝 3152、root 和 Frida 16.7.19 注入运行环境；插件发布包不含原支付宝 APK。2026-10-27 22:23 UTC+8 已有用户外出碰一碰付款成功的反馈，未从设备日志独立核验；带屏蓝环、锁屏、轻智能模式、长期功耗和实际门禁闸机仍未验收。声明式配置及打包控制器测试见该插件 README。
+[支付宝全局碰一下](../plugins/alipay-global/README.md) 则封装已验证的 NFC 进程 R6，使用受权限保护的广播及逐次 requestId 确认启停，可接管原型的兼容会话。它使用 shell-v1，0.2.1 的自动恢复需 code39；不修改共享 Launcher；停用后方法透传，惰性 Hook 随目标进程退出而移除，卸载保留防重复注入所需的会话标记。0.1.0 在手表开机或 NFC 进程重启后需手动重新开启；0.2.1 新增自动恢复，原表已验证开机和 NFC 进程重启恢复；重启后贴纸付款与长期功耗仍待测，随 rc30 发布。用户需自行准备原 OPPO 渠道支付宝 3152、root 和 Frida 16.7.19 注入运行环境；插件发布包不含原支付宝 APK。2026-10-27 22:23 UTC+8 已有用户外出碰一碰付款成功的反馈，未从设备日志独立核验；带屏蓝环、锁屏、轻智能模式、长期功耗和实际门禁闸机仍未验收。声明式配置及打包控制器测试见该插件 README。
 
 每次成功调用必须 exit 0，输出最后一行只能为以下之一：
 
@@ -88,6 +89,11 @@ OWORNATE_PLUGIN_V1 disabled
 | disable | 停用并恢复自己拥有的改动，保留用户配置；支持重复调用 | 执行后另读 status，两次结果都需 disabled |
 | configure | 用新的 OW_SETTING_* 应用配置；已停用时保持停用 | 先读原启停，执行后核对启停未改变，成功才保存新配置 |
 | uninstall | 完成清理，保留用户数据；之后 status 仍能报告 disabled | 先 disable 且确认其回执，再 uninstall 和 status；全部成功才删除安装包 |
+| restore | 仅声明 restoreOnBoot 的插件实现：幂等恢复先前开启的功能；依赖未就绪时可安排自有恢复并返回 disabled | 仅开机或管理器升级后的任务调用，必须同时有成功启用记录；随后另查 status 确认，两者状态须一致 |
+
+从 code39 起，声明 restoreOnBoot 的插件成功 enable 并通过 status 确认后，管理器保存开启意图；disable/uninstall 在调用脚本前撤销该意图。导入和配置不产生开启意图，未声明字段的旧插件保持原行为。开机与 MY_PACKAGE_REPLACED 触发一次有限 Job，失败最多再试两次；不承诺即时恢复，失败信息显示在插件页，手动操作会清理过期诊断。Job 只允许系统绑定，不提供任意命令入口。
+
+管理器的 `.restore-enabled.json` 与 `.operation-lock/boot` 为内部保留文件。执行锁以 boot ID 区分重启残留，仅清理明确属于旧 boot 的锁，同次启动仍保持互斥。插件自己的 NFC 等进程恢复应尊重同一操作锁和手动停用意图。
 
 没有 install 动作：导入只注册文件；真正初始化放在 enable 内。status 无法读取时总开关和设置不可写，仍允许用户确认卸载以尝试清理；卸载不依赖第一次 status 成功。清理失败保留脚本供排查，不提供跳过脚本的强制卸载。
 

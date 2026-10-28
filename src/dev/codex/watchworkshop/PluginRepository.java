@@ -373,6 +373,33 @@ final class PluginRepository {
         }
     }
 
+    /** User intent is separate from transient runtime status and retained configuration. */
+    synchronized boolean restoreRequested(String id) {
+        Path file = dataDir(id).toPath().resolve(".restore-enabled.json");
+        try {
+            if (!exists(file)) return false;
+            requireRegularFile(file);
+            Map<String, String> values = readStoredConfig(file);
+            if (values.size() != 1 || !"true".equals(values.get("enabled"))) {
+                throw new IOException("自动恢复记录无效");
+            }
+            return true;
+        } catch (IOException e) {
+            throw storageFailure("读取自动恢复记录失败", e);
+        }
+    }
+
+    synchronized void setRestoreRequested(String id, boolean enabled) {
+        Path file = dataDir(id).toPath().resolve(".restore-enabled.json");
+        try {
+            if (exists(file)) requireRegularFile(file);
+            if (enabled) writeConfigValues(file, Collections.singletonMap("enabled", "true"));
+            else Files.deleteIfExists(file);
+        } catch (IOException e) {
+            throw storageFailure("保存自动恢复记录失败", e);
+        }
+    }
+
     private UpgradeInspection inspectUpgrade(Pending pending) throws IOException {
         if (Files.isSymbolicLink(root) || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("插件仓库目录不存在或不安全");

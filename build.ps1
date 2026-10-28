@@ -31,7 +31,7 @@
     assets\licenses\*.txt 必须存在、非空且完整进包，否则直接失败。
     复制与链接都在纯 ASCII 构建目录内完成，不直接在中文项目目录里读写。
 
-    不连接手表、不自动安装到设备、不 enable 无障碍服务、不注册开机广播以外的后台组件。
+    构建阶段不连接手表、不自动安装到设备、不 enable 无障碍服务；后台组件以 Manifest 为准。
 
 .PARAMETER SdkRoot
     Android SDK 根目录。环境变量：WATCHWORKSHOP_ANDROID_SDK、ANDROID_SDK_ROOT、ANDROID_HOME。

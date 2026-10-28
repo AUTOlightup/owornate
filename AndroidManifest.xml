@@ -12,8 +12,9 @@
     只用来判断快应用引擎是否到过前台，从而决定亮屏时要不要重读纪念日。
   - 只有一个带 LAUNCHER 入口的 Activity；三个小组件设置页只响应 APPWIDGET_CONFIGURE。
   - 纪念日模式只读系统快应用“纪念日”的数据文件，用固定命令读取，从不写入。
-  - RuntimeBootReceiver 只处理 BOOT_COMPLETED 与 MY_PACKAGE_REPLACED，且只在已有本包
-    独立目录时做一次 ensure，不执行任意 shell、不创建缺失目录、不接管生产组件。
+  - RuntimeBootReceiver 只处理 BOOT_COMPLETED 与 MY_PACKAGE_REPLACED：保留已有独立目录
+    的有限 ensure，并安排 PluginBootJob 恢复用户已开启且声明 restoreOnBoot 的可信插件。
+    JobService 只允许系统绑定；不接受外部 shell 或路径，不自动启用新导入插件。
   - RuntimeAccessibility 由独立安装流程启用，兼容模式不启用；构建只打包。
     它只处理 Launcher 事件，不读取窗口内容；只有持有 BIND_ACCESSIBILITY_SERVICE 的系统
     能绑定它，不监听端口、不导出调试入口。
@@ -25,8 +26,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="dev.codex.watchworkshop"
-    android:versionCode="38"
-    android:versionName="1.0.1-rc29">
+    android:versionCode="39"
+    android:versionName="1.0.1-rc30">
 
     <uses-sdk
         android:minSdkVersion="26"
@@ -74,6 +75,8 @@
             android:excludeFromRecents="true" android:noHistory="true"
             android:theme="@style/AppTheme" />
         <service android:name="dev.codex.watchworkshop.CaptureService" android:exported="false" />
+        <service android:name="dev.codex.watchworkshop.PluginBootJob"
+            android:exported="true" android:permission="android.permission.BIND_JOB_SERVICE" />
         <activity android:name="dev.codex.watchworkshop.PluginActivity"
             android:exported="false" android:label="本地插件" android:theme="@style/AppTheme" />
         <activity android:name="dev.codex.watchworkshop.UpdateActivity"

@@ -42,7 +42,7 @@ def main():
         binary('pidof', 'test -f "$FAKE_ROOT/pid" && cat "$FAKE_ROOT/pid"')
         binary('sleep', 'exit 0')
         binary('timeout', '[ "$1" != -k ] || shift 2; shift; exec "$@"')
-        binary('dumpsys', 'echo "versionCode=$(cat "$FAKE_ROOT/version") minSdk=19"')
+        binary('dumpsys', 'if [ "$1" = nfc ]; then [ -f "$FAKE_ROOT/nfc-off" ] || echo mState=on; else echo "versionCode=$(cat "$FAKE_ROOT/version") minSdk=19"; fi')
         binary('am', r'''
 action=; request=; off=false
 while [ "$#" -gt 0 ]; do
@@ -80,6 +80,12 @@ printf '{"schema":"owornate-global-tap-v1","revision":6,"pid":%s,"ready":true,"e
         for path in ('/data/local/tmp/watchworkshop-runtime/frida-inject', '/data/local/tmp/watchhide/frida-inject'):
             source = source.replace(path, (bins / 'frida-inject').as_posix())
         script = root / 'plugin.sh'
+        # Isolate the controller from its resident process monitor here. Real watcher
+        # spawning/restart/stop is covered by device integration, not a busy mock loop.
+        dispatch = '[ "$(id -u)" = 0 ] || fail'
+        source = source.replace(dispatch,
+            'start_watcher() { echo started > "$OW_PLUGIN_DATA/test-watch"; }\n'
+            'stop_watcher() { rm -f "$OW_PLUGIN_DATA/test-watch"; }\n' + dispatch)
         script.write_text(source, encoding='utf-8', newline='\n')
         checks = 0
 
@@ -106,9 +112,11 @@ printf '{"schema":"owornate-global-tap-v1","revision":6,"pid":%s,"ready":true,"e
         run('status', 'enabled')
         run('enable', 'enabled')
         assert count() == 0, 'adoption reinjected'
+        assert (data / 'auto-enabled').exists() and (data / 'test-watch').exists()
         run('configure', 'enabled', off='false')
         assert json.loads(state.read_text())['allowScreenOff'] is False
         run('disable')
+        assert not (data / 'auto-enabled').exists() and not (data / 'test-watch').exists()
         run('configure', off='true')
         assert json.loads(state.read_text())['enabled'] is False
         run('enable', 'enabled')
@@ -140,8 +148,14 @@ printf '{"schema":"owornate-global-tap-v1","revision":6,"pid":%s,"ready":true,"e
         run('enable', error=True)
         assert count() == 0
         (root / 'version').write_text('3152')
-        run('enable', 'enabled')
+        (root / 'nfc-off').touch()
+        run('restore')
+        assert (data / 'auto-enabled').exists() and (data / 'test-watch').exists() and count() == 0
+        (root / 'nfc-off').unlink()
+        run('recover', 'enabled')
         assert count() == 1
+        run('restore', 'enabled')
+        assert count() == 1, 'restore reinjected current process'
         run('enable', 'enabled')
         assert count() == 1
         run('configure', error=True, off='invalid')
@@ -151,13 +165,20 @@ printf '{"schema":"owornate-global-tap-v1","revision":6,"pid":%s,"ready":true,"e
         run('uninstall')
         run('status')
         assert not (data / 'global-tap.js').exists()
+        # A reboot can reuse the PID: persisted ready state must not be adopted.
+        (proc / 'sys/kernel/random/boot_id').write_text('next-boot\n')
+        run('restore', 'enabled')
+        assert count() == 2, 'stale prior-boot snapshot was adopted'
+        run('restore', 'enabled')
+        assert count() == 2, 'same-boot restore reinjected'
+        run('uninstall')
         # Failed cold attach must also retain its attempt and reject a retry.
         (root / 'pid').write_text('333')
         (root / 'attach-fails').touch()
         run('enable', error=True)
-        assert count() == 2
+        assert count() == 3
         run('enable', error=True)
-        assert count() == 2, 'failed attach retried on same PID'
+        assert count() == 3, 'failed attach retried on same PID'
         (root / 'pid').unlink()
         run('status')
         print(f'PASS {checks} controller cases: adoption, lifecycle, configuration, restart and failed-attach guard')

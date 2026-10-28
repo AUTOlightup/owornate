@@ -26,6 +26,9 @@ case "${1-}" in
     disable) disable ;;
     configure) configure ;;
     uninstall) uninstall ;;
+    restore) restore ;;
+    recover) recover ;;
+    watch) watch ;;
     *) fail 'unsupported action' ;;
 esac
 '@

@@ -20,7 +20,13 @@ final class ExternalPlugins {
                     String output = adb.shell(command, 20000);
                     return new PluginRunner.Result(adb.exitCode(), output);
                 });
-                return action.equals("status") ? runner.read(id) : runner.perform(id, action, config);
+                if (action.equals("status")) return runner.read(id);
+                // A manual choice supersedes any earlier startup diagnostic, even if stopping fails.
+                if (action.equals("disable") || action.equals("uninstall"))
+                    context.getSharedPreferences("plugin_restore", 0).edit().remove(id + ".error").apply();
+                boolean enabled = runner.perform(id, action, config);
+                context.getSharedPreferences("plugin_restore", 0).edit().remove(id + ".error").apply();
+                return enabled;
             });
         }
     }

@@ -23,7 +23,7 @@ final class PluginManifest {
     static final String LAUNCHER_RUNTIME = "launcher-v1";
     private static final Set<String> TOP_LEVEL_KEYS = keys(
             "schemaVersion", "runtime", "permissions", "device", "id", "name",
-            "description", "versionName", "versionCode", "settings", "updateUrl", "nativeSettings");
+            "description", "versionName", "versionCode", "settings", "updateUrl", "nativeSettings", "restoreOnBoot");
     private static final Set<String> REQUIRED_TOP_LEVEL_KEYS = keys(
             "schemaVersion", "runtime", "permissions", "device", "id", "name",
             "description", "versionName", "versionCode", "settings");
@@ -48,6 +48,7 @@ final class PluginManifest {
     final String versionName;
     final int versionCode;
     final String updateUrl;
+    final boolean restoreOnBoot;
     final List<Setting> settings;
     /** Host-backed preferences, separate from shell configuration in data/<id>. */
     final List<Setting> nativeSettings;
@@ -68,7 +69,7 @@ final class PluginManifest {
 
     private PluginManifest(String runtime, String id, String name, String description,
             String versionName, int versionCode, String updateUrl, List<Setting> settings,
-            List<Setting> nativeSettings) {
+            List<Setting> nativeSettings, boolean restoreOnBoot) {
         this.runtime = runtime;
         this.id = id;
         this.name = name;
@@ -76,6 +77,7 @@ final class PluginManifest {
         this.versionName = versionName;
         this.versionCode = versionCode;
         this.updateUrl = updateUrl;
+        this.restoreOnBoot = restoreOnBoot;
         this.settings = settings;
         this.nativeSettings = nativeSettings;
     }
@@ -126,6 +128,16 @@ final class PluginManifest {
         String updateUrl = object.has("updateUrl") ? string(object, "updateUrl") : "";
         validateUpdateUrl(updateUrl);
 
+        boolean restoreOnBoot = false;
+        if (object.has("restoreOnBoot")) {
+            Object declared = object.opt("restoreOnBoot");
+            if (!(declared instanceof Boolean)) throw invalid("restoreOnBoot 必须是布尔值");
+            restoreOnBoot = (Boolean) declared;
+            if (restoreOnBoot && !SHELL_RUNTIME.equals(runtime)) {
+                throw invalid("restoreOnBoot 仅用于 shell-v1 插件");
+            }
+        }
+
         JSONArray settingsJson = array(object, "settings");
         if (settingsJson.length() > 12) throw invalid("settings 最多 12 项");
         ArrayList<Setting> settings = new ArrayList<>();
@@ -165,7 +177,7 @@ final class PluginManifest {
             if (!found.equals(expected)) throw invalid("nativeSettings 缺少必需的原生设置");
         }
         return new PluginManifest(runtime, id, name, description, versionName, versionCode,
-                updateUrl, Collections.unmodifiableList(settings), Collections.unmodifiableList(nativeSettings));
+                updateUrl, Collections.unmodifiableList(settings), Collections.unmodifiableList(nativeSettings), restoreOnBoot);
     }
 
     List<Setting> displaySettings() { return nativeSettings.isEmpty() ? settings : nativeSettings; }

@@ -415,6 +415,10 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
                 }
                 ModuleManagementUi.header(ui, this::onBackPressed, this);
                 ModuleManagementUi.status(ui, this);
+                if (manifest.restoreOnBoot && !Boolean.TRUE.equals(enabled)) {
+                    String restoreError = PluginBootJob.failure(this, manifest.id);
+                    if (!restoreError.isEmpty()) ui.note("自动恢复未完成：" + restoreError, "warning");
+                }
                 for (PluginManifest.Setting item : manifest.settings) {
                     ui.row(item.title, configurationLoaded ? item.options.get(config.get(item.key)) : "待读取", "", () -> {
                         if (canConfigure()) { setting = item.key; render(); }
@@ -524,6 +528,7 @@ public final class PluginActivity extends WatchActivity implements ModuleManagem
         ui.value("插件标识", manifest.id);
         ui.value("运行方式", manifest.runtime);
         ui.value("版本代码", String.valueOf(manifest.versionCode));
+        if (manifest.restoreOnBoot) ui.caption("开启后记住状态，重启自动恢复；手动停用后不再恢复。");
         if (!manifest.updateUrl.isEmpty()) ui.value("更新源", manifest.updateUrl);
         if (launcher()) ui.caption("在 Launcher 内运行，启停与部署由管理器处理。");
         if (launcherState != null && !launcherState.limitation().isEmpty()) {
